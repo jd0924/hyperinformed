@@ -1,0 +1,13 @@
+# Credentials & secrets
+twitter-pipeline/cookies.json
+producthunt-pipeline/.env
+
+# Runtime state
+*/last_run.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# Agent-Reach (large cloned repo, not our code)
+twitter-pipeline/Agent-Reach/
