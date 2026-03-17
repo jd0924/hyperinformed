@@ -1,6 +1,6 @@
 # Hyperinformed
 
-Personal intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt digest.
+Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt.
 
 ## "Catch me up"
 
@@ -13,7 +13,7 @@ When the user says "catch me up", run `/catchmeup`. This means:
 
 ## Pipelines
 
-- **YouTube**: `python3 /Users/GenericPerson1/hyperinformed/youtube-pipeline/catchmeup.py`
-- **Twitter/X**: `python3 /Users/GenericPerson1/hyperinformed/twitter-pipeline/catchmeup.py` (requires cookies.json)
-- **GitHub**: `python3 /Users/GenericPerson1/hyperinformed/github-pipeline/catchmeup.py`
-- **Product Hunt**: `python3 /Users/GenericPerson1/hyperinformed/producthunt-pipeline/catchmeup.py` (requires .env with API key)
+- **YouTube**: `python3 youtube-pipeline/catchmeup.py`
+- **Twitter/X**: `python3 twitter-pipeline/catchmeup.py` (requires cookies.json)
+- **GitHub**: `python3 github-pipeline/catchmeup.py` (requires `gh auth login`)
+- **Product Hunt**: `python3 producthunt-pipeline/catchmeup.py` (requires .env with API key)
