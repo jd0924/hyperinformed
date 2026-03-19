@@ -108,7 +108,7 @@ async def main():
     total = 0
     for i, username in enumerate(accounts):
         if i > 0:
-            await asyncio.sleep(2)
+            await asyncio.sleep(8)
         tweets = await fetch_tweets(client, username, since)
         if not tweets:
             continue
