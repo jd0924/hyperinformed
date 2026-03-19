@@ -16,17 +16,19 @@ If arguments are provided, only run the specified platform(s). If no arguments, 
 | github, gh | `python3 HYPERINFORMED_PATH/github-pipeline/catchmeup.py` |
 | producthunt, ph | `python3 HYPERINFORMED_PATH/producthunt-pipeline/catchmeup.py` |
 | every | `python3 HYPERINFORMED_PATH/every-pipeline/catchmeup.py` |
+| hackernews, hn | `python3 HYPERINFORMED_PATH/hackernews-pipeline/catchmeup.py` |
 
 Multiple platforms can be specified: `/catchmeup youtube twitter`
 
 ## Examples
 
-- `/catchmeup` — run all 5 platforms
+- `/catchmeup` — run all 6 platforms
 - `/catchmeup youtube` — YouTube only
 - `/catchmeup x` — Twitter/X only
 - `/catchmeup gh` — GitHub only
 - `/catchmeup ph` — Product Hunt only
 - `/catchmeup every` — Every.to only
+- `/catchmeup hn` — Hacker News blogs only
 - `/catchmeup youtube x` — YouTube and Twitter
 
 ## After fetching
