@@ -1,6 +1,7 @@
 # Credentials & secrets
 twitter-pipeline/cookies.json
 producthunt-pipeline/.env
+every-pipeline/.env
 .mcp.json
 
 # Personal data (use the .example files as templates)
