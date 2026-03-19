@@ -4,6 +4,7 @@
 import json
 import sys
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -15,9 +16,12 @@ load_dotenv(SCRIPT_DIR / ".env")
 API_URL = "https://api.producthunt.com/v2/api/graphql"
 API_KEY = os.getenv("PRODUCTHUNT_API_KEY", "")
 
-QUERY = """
+# Product Hunt's daily cycle resets at midnight Pacific Time.
+PT = timezone(timedelta(hours=-7))
+
+QUERY_TEMPLATE = """
 {
-  posts(order: VOTES, first: 10) {
+  posts(order: RANKING, postedAfter: "%s", postedBefore: "%s", first: 20%s) {
     edges {
       node {
         name
@@ -34,25 +38,73 @@ QUERY = """
         }
       }
     }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
   }
 }
 """
 
+
+MIN_VOTES = 100
+
+
+def fetch_products_for_date(date_pt):
+    """Fetch products with >= MIN_VOTES for a specific date (in PT), paginating."""
+    start = datetime(date_pt.year, date_pt.month, date_pt.day, tzinfo=PT)
+    end = start + timedelta(days=1)
+    all_products = []
+    cursor = None
+
+    for _ in range(10):  # safety cap
+        after_clause = f', after: "{cursor}"' if cursor else ""
+        query = QUERY_TEMPLATE % (start.isoformat(), end.isoformat(), after_clause)
+        payload = json.dumps({"query": query}).encode()
+        req = urllib.request.Request(
+            API_URL,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {API_KEY}",
+                "Content-Type": "application/json",
+                "User-Agent": "HyperinformedBot/1.0",
+            },
+        )
+        resp = urllib.request.urlopen(req)
+        data = json.loads(resp.read())
+        posts = data.get("data", {}).get("posts", {})
+        edges = posts.get("edges", [])
+
+        below_threshold = False
+        for e in edges:
+            product = e["node"]
+            if product["votesCount"] >= MIN_VOTES:
+                all_products.append(product)
+            elif product["votesCount"] == 0:
+                # Promoted products (0 votes) — include regardless
+                all_products.append(product)
+            else:
+                below_threshold = True
+
+        if below_threshold:
+            break
+
+        page_info = posts.get("pageInfo", {})
+        if not page_info.get("hasNextPage"):
+            break
+        cursor = page_info.get("endCursor")
+
+    return all_products, date_pt
+
+
 def fetch_products():
-    payload = json.dumps({"query": QUERY}).encode()
-    req = urllib.request.Request(
-        API_URL,
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json",
-            "User-Agent": "HyperinformedBot/1.0",
-        },
-    )
-    resp = urllib.request.urlopen(req)
-    data = json.loads(resp.read())
-    edges = data.get("data", {}).get("posts", {}).get("edges", [])
-    return [e["node"] for e in edges]
+    """Fetch today's products; fall back to yesterday if today has none yet."""
+    today_pt = datetime.now(PT).date()
+    products, date_used = fetch_products_for_date(today_pt)
+    if not products:
+        yesterday = today_pt - timedelta(days=1)
+        products, date_used = fetch_products_for_date(yesterday)
+    return products, date_used
 
 
 def main():
@@ -67,11 +119,12 @@ def main():
         print(f'   PRODUCTHUNT_API_KEY=your_token_here')
         sys.exit(1)
 
-    print(f"{'=' * 70}")
-    print(f"  PRODUCT HUNT — TODAY'S TOP PRODUCTS")
-    print(f"{'=' * 70}\n")
+    products, date_used = fetch_products()
+    date_label = date_used.strftime("%A, %B %-d, %Y")
 
-    products = fetch_products()
+    print(f"{'=' * 70}")
+    print(f"  PRODUCT HUNT — TOP PRODUCTS FOR {date_label.upper()}")
+    print(f"{'=' * 70}\n")
     if not products:
         print("  No products found.\n")
     else:
