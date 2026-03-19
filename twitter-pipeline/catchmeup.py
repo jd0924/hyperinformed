@@ -32,35 +32,44 @@ def save_last_run():
     LAST_RUN_FILE.write_text(datetime.now(timezone.utc).isoformat())
 
 
-async def fetch_tweets(client, username, since):
+async def fetch_tweets(client, username, since, max_retries=3):
     tweets = []
-    try:
-        user = await client.get_user_by_screen_name(username)
-        result = await client.get_user_tweets(user.id, "Tweets", count=20)
-        for tweet in result:
-            dt = tweet.created_at_datetime
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            if dt > since:
-                # Skip pure retweets
-                if tweet.retweeted_tweet and not tweet.text:
-                    continue
-                url = f"https://x.com/{user.screen_name}/status/{tweet.id}"
-                text = tweet.full_text or tweet.text or ""
-                # Truncate long tweets for digest
-                display = text.replace("\n", " ")
-                if len(display) > 280:
-                    display = display[:277] + "..."
-                tweets.append({
-                    "username": user.screen_name,
-                    "name": user.name,
-                    "text": display,
-                    "date": dt.strftime("%Y-%m-%d %H:%M"),
-                    "url": url,
-                    "likes": tweet.favorite_count or 0,
-                })
-    except Exception as e:
-        print(f"  [!] Error fetching @{username}: {e}")
+    for attempt in range(max_retries):
+        try:
+            user = await client.get_user_by_screen_name(username)
+            result = await client.get_user_tweets(user.id, "Tweets", count=20)
+            for tweet in result:
+                dt = tweet.created_at_datetime
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if dt > since:
+                    # Skip pure retweets
+                    if tweet.retweeted_tweet and not tweet.text:
+                        continue
+                    url = f"https://x.com/{user.screen_name}/status/{tweet.id}"
+                    text = tweet.full_text or tweet.text or ""
+                    # Truncate long tweets for digest
+                    display = text.replace("\n", " ")
+                    if len(display) > 280:
+                        display = display[:277] + "..."
+                    tweets.append({
+                        "username": user.screen_name,
+                        "name": user.name,
+                        "text": display,
+                        "date": dt.strftime("%Y-%m-%d %H:%M"),
+                        "url": url,
+                        "likes": tweet.favorite_count or 0,
+                    })
+            return tweets
+        except Exception as e:
+            err = str(e)
+            if "429" in err and attempt < max_retries - 1:
+                wait = 15 * (attempt + 1)
+                print(f"  [~] Rate limited on @{username}, waiting {wait}s...")
+                await asyncio.sleep(wait)
+                continue
+            print(f"  [!] Error fetching @{username}: {e}")
+            return tweets
     return tweets
 
 
