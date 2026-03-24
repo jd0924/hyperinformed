@@ -1,19 +1,20 @@
 # Hyperinformed
 
-A multi-source intelligence feed that aggregates content from YouTube, X/Twitter, GitHub, Product Hunt, Every.to, and Hacker News top blogs into a single catch-me-up digest. Built to work with [Claude Code](https://claude.ai/claude-code) as a `/catchmeup` slash command.
+A multi-source intelligence feed that aggregates content from YouTube, X/Twitter, GitHub, Product Hunt, Every.to, Hacker News top blogs, and Kickstarter into a single catch-me-up digest. Built to work with [Claude Code](https://claude.ai/claude-code) as a `/catchmeup` slash command.
 
 ## What it does
 
-You say `/catchmeup` and get a topic-grouped summary of everything that happened since you last checked — across all your feeds. New YouTube videos, tweets from people you follow, trending GitHub repos, top Product Hunt launches, Every.to articles, and posts from 92 top Hacker News blogs. All summarized and connected by theme, not listed by source.
+You say `/catchmeup` and get a topic-grouped summary of everything that happened since you last checked — across all your feeds. New YouTube videos, tweets from people you follow, trending GitHub repos, top Product Hunt launches, Every.to articles, posts from 92 top Hacker News blogs, and trending Kickstarter projects. All summarized and connected by theme, not listed by source.
 
 ```
-/catchmeup            # all 6 sources
+/catchmeup            # all 7 sources
 /catchmeup youtube    # just YouTube
 /catchmeup x          # just Twitter
 /catchmeup gh         # just GitHub
 /catchmeup ph         # just Product Hunt
 /catchmeup every      # just Every.to
 /catchmeup hn         # just Hacker News blogs
+/catchmeup ks         # just Kickstarter
 /catchmeup youtube x  # mix and match
 ```
 
@@ -48,14 +49,26 @@ Then edit `~/.claude/commands/catchmeup.md` and replace `HYPERINFORMED_PATH` wit
 
 #### YouTube
 
-Export your subscriptions from [Google Takeout](https://takeout.google.com/) (select YouTube only), then copy the CSV:
+Requires a YouTube Data API v3 key (free, 10,000 units/day):
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Create a project and enable the YouTube Data API v3
+3. Create an API key under Credentials
+4. Save it:
+
+```bash
+# Create youtube-pipeline/.env with:
+YOUTUBE_API_KEY=your_key_here
+```
+
+Then add your subscriptions:
 
 ```bash
 cp youtube-pipeline/subscriptions.csv.example youtube-pipeline/subscriptions.csv
-# Replace with your actual subscriptions.csv from Takeout
+# Edit subscriptions.csv — format: Channel Id,Channel Url,Channel Title
 ```
 
-The CSV format is `Channel Id,Channel Url,Channel Title` — one channel per row.
+Each channel costs 1 API unit per fetch — 50 channels = 50 units out of 10,000/day.
 
 #### Twitter / X
 
@@ -69,6 +82,8 @@ The CSV format is `Channel Id,Channel Url,Channel Title` — one channel per row
 cp twitter-pipeline/accounts.txt.example twitter-pipeline/accounts.txt
 # Edit accounts.txt — one @handle per line, # for comments
 ```
+
+User IDs are cached automatically after the first run (`user_cache.json`) to halve API calls and stay under Twitter's rate limits (50 requests per 15-minute window).
 
 Cookies expire periodically — re-export when the script stops working.
 
@@ -105,6 +120,10 @@ EVERY_FEED_URL=https://every.to/feeds/YOUR_TOKEN.xml
 
 No configuration needed — the pipeline ships with an OPML file of 92 top Hacker News blogs and fetches them via RSS.
 
+#### Kickstarter
+
+No configuration needed — the pipeline scrapes trending live projects from Kickstarter.
+
 ## How it works
 
 Each pipeline has its own `catchmeup.py` that:
@@ -122,10 +141,10 @@ hyperinformed/
 ├── catchmeup.md                        # Slash command template
 ├── requirements.txt
 ├── youtube-pipeline/
-│   ├── catchmeup.py                    # YouTube RSS fetcher
+│   ├── catchmeup.py                    # YouTube Data API v3
 │   └── subscriptions.csv.example
 ├── twitter-pipeline/
-│   ├── catchmeup.py                    # X/Twitter via twikit
+│   ├── catchmeup.py                    # X/Twitter via twikit + user ID cache
 │   └── accounts.txt.example
 ├── github-pipeline/
 │   └── catchmeup.py                    # Trending + starred repos
@@ -134,9 +153,11 @@ hyperinformed/
 │   └── .env.example
 ├── every-pipeline/
 │   └── catchmeup.py                    # Every.to private RSS feed
-└── hackernews-pipeline/
-    ├── catchmeup.py                    # Top HN blogs via RSS/Atom
-    └── feeds.opml                      # 92 curated blog feeds
+├── hackernews-pipeline/
+│   ├── catchmeup.py                    # Top HN blogs via RSS/Atom
+│   └── feeds.opml                      # 92 curated blog feeds
+└── kickstarter-pipeline/
+    └── catchmeup.py                    # Kickstarter trending projects
 ```
 
 ## Adding more pipelines
