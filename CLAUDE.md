@@ -1,12 +1,12 @@
 # Hyperinformed
 
-Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt + Every.to + Hacker News blogs.
+Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt + Every.to + Hacker News blogs + Kickstarter.
 
 ## "Catch me up"
 
 When the user says "catch me up", run `/catchmeup`. This means:
 
-1. Run all six pipelines (YouTube, Twitter, GitHub, Product Hunt, Every.to, Hacker News)
+1. Run all seven pipelines (YouTube, Twitter, GitHub, Product Hunt, Every.to, Hacker News, Kickstarter)
 2. Summarize everything — grouped by TOPIC not by source/account. Connect different voices discussing the same thing.
 3. At the end, highlight the top 3-5 most interesting/notable items across all sources
 4. If 0 new items from a source, just note they're caught up on that source
@@ -19,6 +19,7 @@ When the user says "catch me up", run `/catchmeup`. This means:
 - **Product Hunt**: `python3 producthunt-pipeline/catchmeup.py` (requires .env with API key)
 - **Every.to**: `python3 every-pipeline/catchmeup.py` (private RSS feed)
 - **Hacker News**: `python3 hackernews-pipeline/catchmeup.py` (92 curated blog RSS feeds)
+- **Kickstarter**: `python3 kickstarter-pipeline/catchmeup.py` (trending live projects)
 
 ## Git & Security Rules
 
