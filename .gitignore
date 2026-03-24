@@ -3,7 +3,8 @@ twitter-pipeline/cookies.json
 youtube-pipeline/.env
 producthunt-pipeline/.env
 every-pipeline/.env
-.mcp.json
+.mcp*.json
+.claude/
 
 # Personal data (use the .example files as templates)
 youtube-pipeline/subscriptions.csv
@@ -18,7 +19,7 @@ __pycache__/
 *.pyc
 
 # macOS
-.DS_Store
+**/.DS_Store
 
 # Agent-Reach (large cloned repo, not our code)
 twitter-pipeline/Agent-Reach/
