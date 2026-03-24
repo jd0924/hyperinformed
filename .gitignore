@@ -1,18 +1,10 @@
-# Credentials & secrets
-twitter-pipeline/cookies.json
-youtube-pipeline/.env
-producthunt-pipeline/.env
-every-pipeline/.env
-.mcp*.json
-.claude/
-
-# Personal data (use the .example files as templates)
-youtube-pipeline/subscriptions.csv
-twitter-pipeline/accounts.txt
-
-# Runtime state
+# Runtime state (per-machine, not synced)
 */last_run.txt
 twitter-pipeline/user_cache.json
+
+# Tool config (local to each machine)
+.mcp*.json
+.claude/
 
 # Python
 __pycache__/
