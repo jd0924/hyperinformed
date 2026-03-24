@@ -13,6 +13,7 @@ SCRIPT_DIR = Path(__file__).parent
 ACCOUNTS_FILE = SCRIPT_DIR / "accounts.txt"
 COOKIES_FILE = SCRIPT_DIR / "cookies.json"
 LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
+USER_CACHE_FILE = SCRIPT_DIR / "user_cache.json"
 
 
 def load_accounts():
@@ -32,29 +33,56 @@ def save_last_run():
     LAST_RUN_FILE.write_text(datetime.now(timezone.utc).isoformat())
 
 
-async def fetch_tweets(client, username, since, max_retries=3):
+def load_user_cache():
+    if USER_CACHE_FILE.exists():
+        try:
+            return json.loads(USER_CACHE_FILE.read_text())
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+
+def save_user_cache(cache):
+    USER_CACHE_FILE.write_text(json.dumps(cache, indent=2))
+
+
+async def resolve_user(client, username, cache):
+    """Get user ID from cache, or look up once and cache it."""
+    key = username.lower()
+    if key in cache:
+        c = cache[key]
+        return c["id"], c["screen_name"], c["name"]
+
+    user = await client.get_user_by_screen_name(username)
+    cache[key] = {
+        "id": user.id,
+        "screen_name": user.screen_name,
+        "name": user.name,
+    }
+    return user.id, user.screen_name, user.name
+
+
+async def fetch_tweets(client, username, since, cache, max_retries=3):
     tweets = []
     for attempt in range(max_retries):
         try:
-            user = await client.get_user_by_screen_name(username)
-            result = await client.get_user_tweets(user.id, "Tweets", count=20)
+            user_id, screen_name, display_name = await resolve_user(
+                client, username, cache
+            )
+            result = await client.get_user_tweets(user_id, "Tweets", count=20)
             for tweet in result:
                 dt = tweet.created_at_datetime
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
                 if dt > since:
-                    # Skip pure retweets
                     if tweet.retweeted_tweet and not tweet.text:
                         continue
-                    url = f"https://x.com/{user.screen_name}/status/{tweet.id}"
+                    url = f"https://x.com/{screen_name}/status/{tweet.id}"
                     text = tweet.full_text or tweet.text or ""
-                    # Truncate long tweets for digest
                     display = text.replace("\n", " ")
-                    if len(display) > 280:
-                        display = display[:277] + "..."
                     tweets.append({
-                        "username": user.screen_name,
-                        "name": user.name,
+                        "username": screen_name,
+                        "name": display_name,
                         "text": display,
                         "date": dt.strftime("%Y-%m-%d %H:%M"),
                         "url": url,
@@ -87,6 +115,7 @@ async def main():
     accounts = load_accounts()
     since = get_last_run()
     first_run = not LAST_RUN_FILE.exists()
+    cache = load_user_cache()
 
     client = Client(language="en-US")
 
@@ -105,11 +134,16 @@ async def main():
         print(f"  Tweets since {since.strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"{'=' * 70}\n")
 
+    # Count how many need UserByScreenName lookup (not cached)
+    uncached = [u for u in accounts if u.lower() not in cache]
+    if uncached:
+        print(f"  [~] Resolving {len(uncached)} new user IDs...\n")
+
     total = 0
     for i, username in enumerate(accounts):
         if i > 0:
             await asyncio.sleep(8)
-        tweets = await fetch_tweets(client, username, since)
+        tweets = await fetch_tweets(client, username, since, cache)
         if not tweets:
             continue
         label = tweets[0]["name"]
@@ -120,6 +154,9 @@ async def main():
             print(f"    {t['text']}")
             print(f"    {t['url']}\n")
         total += len(tweets)
+
+    # Save cache so next run skips UserByScreenName entirely
+    save_user_cache(cache)
 
     print(f"{'=' * 70}")
     print(f"  {total} new tweet(s) across {len(accounts)} accounts")

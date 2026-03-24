@@ -1,5 +1,6 @@
 # Credentials & secrets
 twitter-pipeline/cookies.json
+youtube-pipeline/.env
 producthunt-pipeline/.env
 every-pipeline/.env
 .mcp.json
@@ -10,6 +11,7 @@ twitter-pipeline/accounts.txt
 
 # Runtime state
 */last_run.txt
+twitter-pipeline/user_cache.json
 
 # Python
 __pycache__/
