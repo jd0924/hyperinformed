@@ -4,6 +4,7 @@
 import csv
 import json
 import os
+import re
 import sys
 import urllib.request
 import urllib.error
@@ -54,6 +55,80 @@ def api_get(endpoint, params):
     return json.loads(resp.read())
 
 
+def parse_duration(iso_duration):
+    """Parse ISO 8601 duration (e.g. PT1H2M3S) to total seconds."""
+    match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", iso_duration or "")
+    if not match:
+        return 0
+    hours = int(match.group(1) or 0)
+    minutes = int(match.group(2) or 0)
+    seconds = int(match.group(3) or 0)
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def format_duration(total_seconds):
+    """Format seconds as human-readable duration string."""
+    if total_seconds == 0:
+        return "0:00"
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
+
+
+def is_short_url(video_id):
+    """Check if youtube.com/shorts/{id} resolves (confirms it's a Short)."""
+    url = f"https://www.youtube.com/shorts/{video_id}"
+    req = urllib.request.Request(url, method="HEAD")
+    req.add_header("User-Agent", "Mozilla/5.0")
+    try:
+        resp = urllib.request.urlopen(req, timeout=5)
+        final_url = resp.geturl()
+        return "/shorts/" in final_url
+    except Exception:
+        return False
+
+
+def fetch_video_details(video_ids):
+    """Batch-fetch duration and live status for up to 50 video IDs."""
+    details = {}
+    for i in range(0, len(video_ids), 50):
+        batch = video_ids[i:i + 50]
+        data = api_get("videos", {
+            "part": "contentDetails,snippet,liveStreamingDetails",
+            "id": ",".join(batch),
+        })
+        for item in data.get("items", []):
+            vid = item["id"]
+            duration_str = item.get("contentDetails", {}).get("duration", "")
+            live_content = item.get("snippet", {}).get("liveBroadcastContent", "none")
+            has_live_details = "liveStreamingDetails" in item
+            details[vid] = {
+                "duration_seconds": parse_duration(duration_str),
+                "duration_str": duration_str,
+                "live_broadcast": live_content,
+                "is_livestream": has_live_details,
+            }
+    return details
+
+
+def classify_video(video_id, duration_seconds, live_broadcast, is_livestream,
+                   check_shorts=True):
+    """Classify a video as Short, Live, or Video with duration label."""
+    if live_broadcast == "live":
+        return "LIVE"
+    if live_broadcast == "upcoming":
+        return "UPCOMING"
+    if is_livestream:
+        return "STREAM"
+    if duration_seconds <= 60 and check_shorts:
+        if is_short_url(video_id):
+            return "SHORT"
+    return "VIDEO"
+
+
 def get_uploads_playlist_id(channel_id):
     """Channel ID 'UCxxx' -> uploads playlist 'UUxxx' (replace UC with UU)."""
     return "UU" + channel_id[2:]
@@ -62,7 +137,6 @@ def get_uploads_playlist_id(channel_id):
 def fetch_videos(channel_id, channel_name, since):
     """Fetch recent videos from a channel's uploads playlist. Costs 1 API unit."""
     playlist_id = get_uploads_playlist_id(channel_id)
-    since_str = since.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     videos = []
     data = api_get("playlistItems", {
@@ -85,6 +159,7 @@ def fetch_videos(channel_id, channel_name, since):
             "channel": channel_name,
             "title": snippet.get("title", ""),
             "date": published.strftime("%Y-%m-%d %H:%M"),
+            "video_id": video_id,
             "url": f"https://www.youtube.com/watch?v={video_id}",
             "description": (snippet.get("description", "") or "")[:200],
         })
@@ -114,29 +189,83 @@ def main():
         print(f"  Videos since {since.strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"{'=' * 70}\n")
 
-    total = 0
+    # Phase 1: Collect all videos from all channels
+    all_videos = []
     errors = 0
     for cid, name in channels:
         try:
             videos = fetch_videos(cid, name, since)
+            all_videos.extend(videos)
         except Exception as e:
             print(f"  [!] Error fetching {name}: {e}")
             errors += 1
-            continue
-        if not videos:
+
+    # Phase 2: Batch-fetch video details (duration, live status)
+    video_ids = [v["video_id"] for v in all_videos if v.get("video_id")]
+    details = {}
+    if video_ids:
+        try:
+            details = fetch_video_details(video_ids)
+        except Exception as e:
+            print(f"  [!] Error fetching video details: {e}")
+
+    # Phase 3: Classify each video and check shorts
+    shorts_to_check = []
+    for v in all_videos:
+        vid = v["video_id"]
+        info = details.get(vid, {})
+        v["duration_seconds"] = info.get("duration_seconds", 0)
+        v["duration"] = format_duration(v["duration_seconds"])
+        v["live_broadcast"] = info.get("live_broadcast", "none")
+        v["is_livestream"] = info.get("is_livestream", False)
+
+        if v["duration_seconds"] <= 60 and v["live_broadcast"] == "none" and not v["is_livestream"]:
+            shorts_to_check.append(v)
+        elif v["live_broadcast"] == "live":
+            v["type"] = "LIVE"
+        elif v["live_broadcast"] == "upcoming":
+            v["type"] = "UPCOMING"
+        elif v["is_livestream"]:
+            v["type"] = "STREAM"
+        else:
+            v["type"] = "VIDEO"
+
+    # Check short candidates via URL probe
+    for v in shorts_to_check:
+        if is_short_url(v["video_id"]):
+            v["type"] = "SHORT"
+            v["url"] = f"https://www.youtube.com/shorts/{v['video_id']}"
+        else:
+            v["type"] = "VIDEO"
+
+    # Phase 4: Print grouped by channel
+    by_channel = {}
+    for v in all_videos:
+        by_channel.setdefault(v["channel"], []).append(v)
+
+    total = len(all_videos)
+    shorts_count = sum(1 for v in all_videos if v.get("type") == "SHORT")
+    streams_count = sum(1 for v in all_videos if v.get("type") in ("LIVE", "STREAM"))
+    videos_count = total - shorts_count - streams_count
+
+    for name in dict.fromkeys(v["channel"] for v in all_videos):
+        channel_videos = by_channel.get(name, [])
+        if not channel_videos:
             continue
         print(f"  {name}")
         print(f"  {'-' * len(name)}")
-        for v in sorted(videos, key=lambda x: x["date"], reverse=True):
-            print(f"    {v['date']}  {v['title']}")
+        for v in sorted(channel_videos, key=lambda x: x["date"], reverse=True):
+            tag = v.get("type", "VIDEO")
+            duration = v.get("duration", "")
+            print(f"    {v['date']}  [{tag}] ({duration})  {v['title']}")
             print(f"    {v['url']}")
-            if v["description"]:
+            if v.get("description"):
                 print(f"    {v['description']}")
             print()
-        total += len(videos)
 
     print(f"{'=' * 70}")
     print(f"  {total} new video(s) across {len(channels)} channels ({errors} errors)")
+    print(f"  {videos_count} videos, {shorts_count} shorts, {streams_count} streams")
     print(f"{'=' * 70}")
 
     save_last_run()
