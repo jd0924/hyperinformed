@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch recent tweets from followed X accounts via twikit."""
+"""Fetch recent tweets from X timeline (Following + For You + Notifications)."""
 
 import asyncio
 import json
@@ -10,15 +10,8 @@ from pathlib import Path
 from twikit import Client
 
 SCRIPT_DIR = Path(__file__).parent
-ACCOUNTS_FILE = SCRIPT_DIR / "accounts.txt"
 COOKIES_FILE = SCRIPT_DIR / "cookies.json"
 LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
-USER_CACHE_FILE = SCRIPT_DIR / "user_cache.json"
-
-
-def load_accounts():
-    lines = ACCOUNTS_FILE.read_text().strip().splitlines()
-    return [l.strip().lstrip("@") for l in lines if l.strip() and not l.startswith("#")]
 
 
 def get_last_run():
@@ -33,71 +26,92 @@ def save_last_run():
     LAST_RUN_FILE.write_text(datetime.now(timezone.utc).isoformat())
 
 
-def load_user_cache():
-    if USER_CACHE_FILE.exists():
-        try:
-            return json.loads(USER_CACHE_FILE.read_text())
-        except (json.JSONDecodeError, IOError):
-            pass
-    return {}
+def parse_tweet(tweet, source):
+    """Extract a dict from a Tweet object. Returns None if no timestamp."""
+    dt = tweet.created_at_datetime
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
 
+    user = tweet.user
+    screen_name = user.screen_name if user else "unknown"
+    display_name = user.name if user else screen_name
 
-def save_user_cache(cache):
-    USER_CACHE_FILE.write_text(json.dumps(cache, indent=2))
+    is_repost = bool(tweet.retweeted_tweet and not tweet.text)
+    is_quote = bool(tweet.quote)
 
+    text = tweet.full_text or tweet.text or ""
+    if is_repost and tweet.retweeted_tweet:
+        rt = tweet.retweeted_tweet
+        rt_user = rt.user
+        text = rt.full_text or rt.text or text
+        screen_name = rt_user.screen_name if rt_user else screen_name
+        display_name = rt_user.name if rt_user else display_name
 
-async def resolve_user(client, username, cache):
-    """Get user ID from cache, or look up once and cache it."""
-    key = username.lower()
-    if key in cache:
-        c = cache[key]
-        return c["id"], c["screen_name"], c["name"]
+    url = f"https://x.com/{screen_name}/status/{tweet.id}"
 
-    user = await client.get_user_by_screen_name(username)
-    cache[key] = {
-        "id": user.id,
-        "screen_name": user.screen_name,
-        "name": user.name,
+    return {
+        "id": tweet.id,
+        "username": screen_name,
+        "name": display_name,
+        "text": text.replace("\n", " "),
+        "date": dt.strftime("%Y-%m-%d %H:%M"),
+        "dt": dt,
+        "url": url,
+        "likes": tweet.favorite_count or 0,
+        "source": source,
+        "type": "repost" if is_repost else ("quote" if is_quote else "original"),
     }
-    return user.id, user.screen_name, user.name
 
 
-async def fetch_tweets(client, username, since, cache, max_retries=3):
-    tweets = []
-    for attempt in range(max_retries):
-        try:
-            user_id, screen_name, display_name = await resolve_user(
-                client, username, cache
-            )
-            result = await client.get_user_tweets(user_id, "Tweets", count=20)
-            for tweet in result:
-                dt = tweet.created_at_datetime
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                if dt > since:
-                    if tweet.retweeted_tweet and not tweet.text:
-                        continue
-                    url = f"https://x.com/{screen_name}/status/{tweet.id}"
-                    text = tweet.full_text or tweet.text or ""
-                    display = text.replace("\n", " ")
-                    tweets.append({
-                        "username": screen_name,
-                        "name": display_name,
-                        "text": display,
-                        "date": dt.strftime("%Y-%m-%d %H:%M"),
-                        "url": url,
-                        "likes": tweet.favorite_count or 0,
-                    })
-            return tweets
-        except Exception as e:
-            err = str(e)
-            if "429" in err and attempt < max_retries - 1:
-                wait = 15 * (attempt + 1)
-                print(f"  [~] Rate limited on @{username}, waiting {wait}s...")
-                await asyncio.sleep(wait)
+async def fetch_timeline(client, fetch_fn, source, since, max_pages=5):
+    """Paginate a timeline endpoint back to `since`."""
+    tweets = {}
+    result = await fetch_fn(count=40)
+
+    for page in range(max_pages):
+        if result is None or len(result) == 0:
+            break
+        reached_cutoff = False
+        for tweet in result:
+            parsed = parse_tweet(tweet, source)
+            if parsed is None:
                 continue
-            print(f"  [!] Error fetching @{username}: {e}")
-            return tweets
+            if parsed["dt"] <= since:
+                reached_cutoff = True
+                break
+            tweets[parsed["id"]] = parsed
+        if reached_cutoff:
+            break
+        try:
+            result = await result.next()
+        except Exception:
+            break
+        await asyncio.sleep(2)
+
+    return tweets
+
+
+async def fetch_notifications(client, since, max_pages=5):
+    """Paginate notifications back to `since`, extracting linked tweets."""
+    tweets = {}
+    result = await client.get_notifications("All", count=40)
+
+    for page in range(max_pages):
+        if result is None or len(result) == 0:
+            break
+        for notif in result:
+            if notif.tweet:
+                parsed = parse_tweet(notif.tweet, "notifications")
+                if parsed and parsed["dt"] > since:
+                    tweets[parsed["id"]] = parsed
+        try:
+            result = await result.next()
+        except Exception:
+            break
+        await asyncio.sleep(2)
+
     return tweets
 
 
@@ -112,14 +126,11 @@ async def main():
         print(f"  4. Save the file as: {COOKIES_FILE}")
         sys.exit(1)
 
-    accounts = load_accounts()
     since = get_last_run()
     first_run = not LAST_RUN_FILE.exists()
-    cache = load_user_cache()
 
     client = Client(language="en-US")
 
-    # Load cookies — support both Cookie-Editor JSON array and simple dict
     raw = json.loads(COOKIES_FILE.read_text())
     if isinstance(raw, list):
         cookie_dict = {c["name"]: c["value"] for c in raw if "name" in c and "value" in c}
@@ -134,32 +145,55 @@ async def main():
         print(f"  Tweets since {since.strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"{'=' * 70}\n")
 
-    # Count how many need UserByScreenName lookup (not cached)
-    uncached = [u for u in accounts if u.lower() not in cache]
-    if uncached:
-        print(f"  [~] Resolving {len(uncached)} new user IDs...\n")
+    # Fetch all three channels
+    all_tweets = {}
 
-    total = 0
-    for i, username in enumerate(accounts):
-        if i > 0:
-            await asyncio.sleep(8)
-        tweets = await fetch_tweets(client, username, since, cache)
-        if not tweets:
-            continue
-        label = tweets[0]["name"]
-        print(f"  @{tweets[0]['username']} ({label})")
-        print(f"  {'-' * (len(label) + len(tweets[0]['username']) + 4)}")
-        for t in sorted(tweets, key=lambda x: x["date"], reverse=True):
-            print(f"    {t['date']}  [{t['likes']} likes]")
-            print(f"    {t['text']}")
-            print(f"    {t['url']}\n")
-        total += len(tweets)
+    print("  [1/3] Fetching Following timeline...")
+    following = await fetch_timeline(
+        client, client.get_latest_timeline, "following", since
+    )
+    all_tweets.update(following)
+    print(f"         {len(following)} tweets")
 
-    # Save cache so next run skips UserByScreenName entirely
-    save_user_cache(cache)
+    await asyncio.sleep(3)
+
+    print("  [2/3] Fetching For You timeline...")
+    for_you = await fetch_timeline(
+        client, client.get_timeline, "for_you", since
+    )
+    # Only add tweets not already seen in Following
+    new_from_fy = {k: v for k, v in for_you.items() if k not in all_tweets}
+    all_tweets.update(new_from_fy)
+    print(f"         {len(for_you)} tweets ({len(new_from_fy)} unique)")
+
+    await asyncio.sleep(3)
+
+    print("  [3/3] Fetching Notifications...")
+    notifs = await fetch_notifications(client, since)
+    new_from_notifs = {k: v for k, v in notifs.items() if k not in all_tweets}
+    all_tweets.update(new_from_notifs)
+    print(f"         {len(notifs)} tweets ({len(new_from_notifs)} unique)")
+
+    print()
+
+    # Display sorted by date
+    sorted_tweets = sorted(all_tweets.values(), key=lambda x: x["date"], reverse=True)
+
+    for t in sorted_tweets:
+        tag = ""
+        if t["type"] == "repost":
+            tag = " [repost]"
+        elif t["type"] == "quote":
+            tag = " [quote]"
+        source_tag = f"[{t['source']}]"
+
+        print(f"  {t['date']}  @{t['username']}{tag}  {source_tag}")
+        print(f"    {t['text']}")
+        print(f"    {t['url']}  [{t['likes']} likes]\n")
 
     print(f"{'=' * 70}")
-    print(f"  {total} new tweet(s) across {len(accounts)} accounts")
+    print(f"  {len(sorted_tweets)} unique tweets")
+    print(f"    Following: {len(following)} | For You: +{len(new_from_fy)} | Notifications: +{len(new_from_notifs)}")
     print(f"{'=' * 70}")
 
     save_last_run()
