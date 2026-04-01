@@ -10,6 +10,9 @@ every-pipeline/.env
 youtube-pipeline/subscriptions.csv
 twitter-pipeline/accounts.txt
 
+# Generated reports (contain personal feed data)
+catchmeup-*.md
+
 # Runtime state
 */last_run.txt
 twitter-pipeline/user_cache.json

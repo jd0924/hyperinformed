@@ -21,6 +21,26 @@ When the user says "catch me up", run `/catchmeup`. This means:
 4. If 0 new items from a source, just note they're caught up on that source
 5. **Report pipeline failures** — If any pipeline fails or errors during fetch, report it immediately at the top of the summary: which pipeline failed, the error message, and the likely reason for the failure
 
+## Report Format Rules
+
+After running pipelines, produce a markdown file (`catchmeup-<start-date>-to-<end-date>.md`) following these rules:
+
+### Structure
+- **Pipeline Status table** at the top — show each pipeline's status (OK/FAILED) and item count
+- **One top-level section (`##`) per platform** — never merge content across platforms
+- **Topic subgroups (`###`) within each platform** — group related items by theme/relevance
+- **Top Highlights (`##`)** section at the end — the 5 most notable items across all platforms
+
+### Content Rules
+- **Every item must include its URL** — no exceptions, every video/tweet/post/repo/product gets a clickable link
+- **Filter out ads** — exclude purely promotional content with no informational value. For sponsored YouTube videos, keep the video if substantive but note the sponsorship. For Twitter, exclude low-value RTs (memes, political noise with no tech relevance). Focus on original insights, news, and announcements.
+- **YouTube** — include channel name, video type tag (`[VIDEO]`, `[SHORT]`, `[STREAM]`, `[UPCOMING]`), and duration
+- **Twitter/X** — focus on substantive tweets; include author handle and like count for context
+- **GitHub** — include language, star count, and one-line description
+- **Product Hunt** — include vote count and category
+- **Hacker News blogs** — filter to posts within the date range; group by topic themes; for large result sets (1000+), curate to the most relevant posts
+- **Kickstarter** — include funding percentage, amount raised, and backer count
+
 ## Pipelines
 
 - **YouTube**: `python3 youtube-pipeline/catchmeup.py` — Output includes `[SHORT]`, `[VIDEO]`, `[STREAM]`, `[UPCOMING]` tags with duration for each video. When presenting YouTube results, always include the URL for every single video regardless of type (short, video, stream, etc.).
