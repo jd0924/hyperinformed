@@ -174,7 +174,7 @@ def main():
             "status": status,
             "json_count": json_count,
             "html_count": html_count,
-            "missing_urls": len(missing_urls) if 'missing_urls' in dir() else 0,
+            "missing_urls": len(missing_urls),
             "errors": errors,
         })
 

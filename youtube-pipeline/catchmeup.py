@@ -7,7 +7,6 @@ import os
 import re
 import sys
 import urllib.request
-import urllib.error
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 

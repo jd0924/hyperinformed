@@ -89,7 +89,7 @@ def write_output_json(status, since, articles):
         "pipeline": "every",
         "status": status,
         "count": len(items),
-        "since": since.isoformat() if since else "",
+        "since": since.isoformat().replace("+00:00", "Z") if since else "",
         "items": items,
     }
     with open(OUTPUT_FILE, "w") as f:
