@@ -12,9 +12,11 @@ twitter-pipeline/accounts.txt
 
 # Generated reports (contain personal feed data)
 catchmeup-*.md
+catchmeup-*.html
 
 # Runtime state
 */last_run.txt
+*/output.json
 twitter-pipeline/user_cache.json
 
 # Python

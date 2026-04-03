@@ -12,6 +12,7 @@ from twikit import Client
 SCRIPT_DIR = Path(__file__).parent
 COOKIES_FILE = SCRIPT_DIR / "cookies.json"
 LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
+OUTPUT_FILE = SCRIPT_DIR / "output.json"
 
 
 def get_last_run():
@@ -38,7 +39,7 @@ def parse_tweet(tweet, source):
     screen_name = user.screen_name if user else "unknown"
     display_name = user.name if user else screen_name
 
-    is_repost = bool(tweet.retweeted_tweet and not tweet.text)
+    is_repost = bool(tweet.retweeted_tweet)
     is_quote = bool(tweet.quote)
 
     text = tweet.full_text or tweet.text or ""
@@ -195,6 +196,33 @@ async def main():
     print(f"  {len(sorted_tweets)} unique tweets")
     print(f"    Following: {len(following)} | For You: +{len(new_from_fy)} | Notifications: +{len(new_from_notifs)}")
     print(f"{'=' * 70}")
+
+    # Write JSON output
+    json_items = [
+        {
+            "title": t["text"][:280],
+            "url": t["url"],
+            "author": f"@{t['username']}",
+            "date": t["date"],
+            "description": "",
+            "meta": {
+                "source": t["source"],
+                "likes": t["likes"],
+                "is_retweet": t["type"] == "repost",
+                "is_quote": t["type"] == "quote",
+            },
+        }
+        for t in sorted_tweets
+    ]
+    output = {
+        "pipeline": "twitter",
+        "status": "ok",
+        "count": len(json_items),
+        "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "items": json_items,
+    }
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
 
     save_last_run()
 

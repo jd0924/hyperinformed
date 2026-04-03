@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fetch recent articles from Every.to via private RSS feed."""
 
+import json
 import os
 import re
 import sys
@@ -15,6 +16,7 @@ SCRIPT_DIR = Path(__file__).parent
 load_dotenv(SCRIPT_DIR / ".env")
 
 LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
+OUTPUT_FILE = SCRIPT_DIR / "output.json"
 FEED_URL = os.getenv("EVERY_FEED_URL", "")
 
 
@@ -71,6 +73,29 @@ def fetch_articles(since):
     return articles
 
 
+def write_output_json(status, since, articles):
+    items = [
+        {
+            "title": a["title"],
+            "url": a["url"],
+            "author": "",
+            "date": a["date"],
+            "description": a.get("summary", ""),
+            "meta": {},
+        }
+        for a in articles
+    ]
+    output = {
+        "pipeline": "every",
+        "status": status,
+        "count": len(items),
+        "since": since.isoformat() if since else "",
+        "items": items,
+    }
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(output, f, indent=2)
+
+
 def main():
     if not FEED_URL:
         print("ERROR: EVERY_FEED_URL not set.")
@@ -82,29 +107,40 @@ def main():
 
     since = get_last_run()
     since_label = since.strftime("%Y-%m-%d %H:%M UTC")
+    status = "ok"
+    articles = []
 
-    print(f"{'=' * 70}")
-    print(f"  EVERY.TO — NEW ARTICLES SINCE {since_label}")
-    print(f"{'=' * 70}\n")
+    try:
+        print(f"{'=' * 70}")
+        print(f"  EVERY.TO — NEW ARTICLES SINCE {since_label}")
+        print(f"{'=' * 70}\n")
 
-    articles = fetch_articles(since)
+        articles = fetch_articles(since)
 
-    if not articles:
-        print(f"  No new articles since last run ({since_label}).\n")
-    else:
-        for i, a in enumerate(articles, 1):
-            print(f"  {i:2}. {a['title']}")
-            print(f"      {a['date']}")
-            if a["summary"]:
-                print(f"      {a['summary']}")
-            print(f"      {a['url']}")
-            print()
+        if not articles:
+            print(f"  No new articles since last run ({since_label}).\n")
+        else:
+            for i, a in enumerate(articles, 1):
+                print(f"  {i:2}. {a['title']}")
+                print(f"      {a['date']}")
+                if a["summary"]:
+                    print(f"      {a['summary']}")
+                print(f"      {a['url']}")
+                print()
 
-    print(f"{'=' * 70}")
-    print(f"  {len(articles)} articles")
-    print(f"{'=' * 70}")
+        print(f"{'=' * 70}")
+        print(f"  {len(articles)} articles")
+        print(f"{'=' * 70}")
 
-    save_last_run()
+        save_last_run()
+    except Exception as e:
+        status = "error"
+        print(f"\n  [!] Error: {e}\n")
+        print(f"{'=' * 70}")
+        print(f"  0 articles (pipeline error)")
+        print(f"{'=' * 70}")
+    finally:
+        write_output_json(status, since, articles)
 
 
 if __name__ == "__main__":

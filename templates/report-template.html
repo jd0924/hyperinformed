@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catch Me Up: <!-- DATE RANGE --></title>
+<style>
+  :root {
+    --bg: #111; --text: #e8e4df; --dim: #7a7570; --accent: #d4a574;
+    --hl-bg: rgba(212,165,116,0.08); --hl-border: #d4a574;
+    --divider: rgba(255,255,255,0.06);
+    --ok-bg: rgba(34,120,67,0.15); --ok-color: #4ade80; --ok-border: #22c55e;
+    --fail-bg: rgba(220,50,50,0.12); --fail-color: #f87171; --fail-border: #ef4444;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; padding-bottom: 80px;
+    -webkit-text-size-adjust: 100%;
+  }
+  .sf { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
+
+  /* Header */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(17,17,17,0.95); backdrop-filter: blur(10px);
+    padding: 18px 20px; display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid var(--divider);
+  }
+  header h1 { font-family: -apple-system,system-ui,sans-serif; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--dim); }
+  .date { font-family: -apple-system,system-ui,sans-serif; font-size: 12px; color: var(--dim); }
+  .counter {
+    font-family: -apple-system,system-ui,sans-serif;
+    background: var(--accent); color: #111;
+    font-size: 11px; font-weight: 700; padding: 4px 11px; border-radius: 12px;
+    transition: transform 0.15s;
+  }
+  .counter.pop { transform: scale(1.2); }
+
+  /* Pipeline Status Table */
+  .status-table { margin: 16px 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--divider); }
+  .status-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--divider); font-family: -apple-system,system-ui,sans-serif; font-size: 13px;
+  }
+  .status-row:last-child { border-bottom: none; }
+  .status-row .name { font-weight: 600; }
+  .status-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 5px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .status-badge.ok { background: var(--ok-bg); color: var(--ok-color); border: 1px solid var(--ok-border); }
+  .status-badge.fail { background: var(--fail-bg); color: var(--fail-color); border: 1px solid var(--fail-border); }
+  .status-count { color: var(--dim); font-size: 12px; margin-left: 8px; }
+
+  /* Highlights Section */
+  .highlights {
+    margin: 20px 20px; padding: 18px 20px;
+    background: rgba(212,165,116,0.04);
+    border-radius: 10px; border: 1px solid rgba(212,165,116,0.2);
+  }
+  .highlights h2 { font-family: -apple-system,system-ui,sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 14px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
+  .hl-item { padding: 10px 0; border-bottom: 1px solid rgba(212,165,116,0.1); }
+  .hl-item:last-child { border-bottom: none; }
+  .hl-item .num { color: var(--accent); font-weight: 800; font-size: 14px; margin-right: 6px; font-family: -apple-system,system-ui,sans-serif; }
+  .hl-item .hl-title { font-weight: 600; font-size: 14px; font-family: -apple-system,system-ui,sans-serif; }
+  .hl-item .hl-desc { font-size: 13px; color: var(--dim); margin-top: 4px; line-height: 1.6; }
+
+  /* Platform Sections */
+  .platform-header {
+    padding: 32px 20px 8px; position: sticky; top: 54px; z-index: 50;
+    background: rgba(17,17,17,0.97);
+  }
+  .platform-header h2 {
+    font-family: -apple-system,system-ui,sans-serif;
+    font-size: 28px; font-weight: 800; letter-spacing: -1px; color: var(--text);
+  }
+  .platform-header .pcount {
+    font-family: -apple-system,system-ui,sans-serif;
+    font-size: 13px; color: var(--dim); font-weight: 400; margin-left: 8px;
+  }
+
+  /* Topic Groups */
+  .topic {
+    padding: 20px 20px 4px;
+    font-family: -apple-system,system-ui,sans-serif;
+    font-size: 11px; font-weight: 600; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 1.5px;
+  }
+
+  /* Items */
+  .item {
+    padding: 16px 20px; border-bottom: 1px solid var(--divider);
+    cursor: pointer; border-left: 2px solid transparent;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+    position: relative; transition: all 0.25s;
+  }
+  .item:active { background: rgba(255,255,255,0.02); }
+  .item.highlighted { background: var(--hl-bg); border-left-color: var(--hl-border); }
+  .item.highlighted::after {
+    content: ''; position: absolute; top: 18px; right: 18px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--hl-border);
+  }
+  .item-title { font-size: 17px; font-weight: 400; line-height: 1.5; font-style: italic; }
+  .item-meta {
+    font-family: -apple-system,system-ui,sans-serif;
+    font-size: 11px; color: var(--dim); display: flex; flex-wrap: wrap;
+    gap: 8px; align-items: center; margin-top: 4px;
+  }
+  .item-meta .author { color: var(--accent); font-weight: 600; }
+  .item-meta .type-tag {
+    color: var(--accent); font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .item-desc { font-size: 15px; color: var(--dim); line-height: 1.7; margin-top: 6px; }
+  a.item-link {
+    display: inline-block; margin-top: 8px;
+    font-family: -apple-system,system-ui,sans-serif;
+    font-size: 11px; color: var(--accent); text-decoration: none; letter-spacing: 0.3px;
+  }
+  a.item-link:hover { text-decoration: underline; }
+
+  /* Fail note */
+  .fail-note {
+    margin: 8px 20px; padding: 10px 14px;
+    background: var(--fail-bg); border: 1px solid var(--fail-border);
+    border-radius: 8px; font-size: 13px; color: var(--fail-color);
+    font-family: -apple-system,system-ui,sans-serif;
+  }
+
+  /* Action Bar */
+  .action-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(17,17,17,0.95); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--divider);
+    padding: 12px 20px; display: flex; gap: 10px; z-index: 200;
+  }
+  .action-btn {
+    font-family: -apple-system,system-ui,sans-serif;
+    flex: 1; padding: 11px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1); background: transparent;
+    color: var(--text); font-size: 13px; font-weight: 600;
+    cursor: pointer; text-align: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .action-btn:active { background: rgba(255,255,255,0.04); }
+  .action-btn.primary { background: var(--accent); border-color: var(--accent); color: #111; }
+  .action-btn.primary:active { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<header>
+  <div><h1>Catch Me Up</h1></div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="date"><!-- DATE RANGE --></span>
+    <div class="counter" id="highlightCount">0</div>
+  </div>
+</header>
+
+<!-- PIPELINE STATUS -->
+<div class="status-table">
+  <!-- One row per pipeline. Example:
+  <div class="status-row"><span class="name">YouTube</span><div><span class="status-badge ok">OK</span><span class="status-count">20</span></div></div>
+  <div class="status-row"><span class="name">Every.to</span><div><span class="status-badge fail">FAIL</span><span class="status-count">HTTP 500</span></div></div>
+  -->
+</div>
+
+<!-- TOP HIGHLIGHTS -->
+<div class="highlights">
+  <h2>Top Highlights</h2>
+  <!-- One per highlight. Example:
+  <div class="hl-item">
+    <span class="num">1.</span><span class="hl-title">Headline here</span>
+    <div class="hl-desc">Description of why this is notable.</div>
+  </div>
+  -->
+</div>
+
+<!-- YOUTUBE SECTION -->
+<div class="platform-header"><h2>YouTube<span class="pcount"><!-- COUNT --> videos</span></h2></div>
+<!-- TOPIC GROUPS AND ITEMS GO HERE. Example:
+<div class="topic">Topic Name</div>
+<div class="item" onclick="toggleHighlight(this)">
+  <div class="item-title">Video Title Here</div>
+  <div class="item-meta">
+    <span class="author">Channel Name</span>
+    <span class="type-tag">Video</span>
+    <span>27:17</span>
+  </div>
+  <div class="item-desc">Description text.</div>
+  <a class="item-link" href="https://..." target="_blank" onclick="event.stopPropagation()">youtube.com/watch?v=...</a>
+</div>
+-->
+
+<!-- TWITTER SECTION -->
+<div class="platform-header"><h2>Twitter / X<span class="pcount"><!-- COUNT --> tweets</span></h2></div>
+<!-- TOPIC GROUPS AND ITEMS GO HERE. Example:
+<div class="topic">Topic Name</div>
+<div class="item" onclick="toggleHighlight(this)">
+  <div class="item-title">Tweet text here</div>
+  <div class="item-meta">
+    <span class="author">@handle</span>
+    <span>95,572 likes</span>
+  </div>
+  <div class="item-desc">Additional context.</div>
+  <a class="item-link" href="https://x.com/..." target="_blank" onclick="event.stopPropagation()">x.com/handle/status/...</a>
+</div>
+-->
+
+<!-- GITHUB SECTION -->
+<div class="platform-header"><h2>GitHub<span class="pcount"><!-- COUNT --> repos</span></h2></div>
+<!-- TOPIC GROUPS AND ITEMS GO HERE. Example:
+<div class="topic">Trending Today</div>
+<div class="item" onclick="toggleHighlight(this)">
+  <div class="item-title">owner/repo-name</div>
+  <div class="item-meta">
+    <span class="type-tag">Python</span>
+    <span>34,856 stars</span>
+  </div>
+  <div class="item-desc">Repo description.</div>
+  <a class="item-link" href="https://github.com/..." target="_blank" onclick="event.stopPropagation()">github.com/owner/repo</a>
+</div>
+-->
+
+<!-- PRODUCTHUNT SECTION -->
+<div class="platform-header"><h2>Product Hunt<span class="pcount"><!-- COUNT --> products</span></h2></div>
+<!-- TOPIC GROUPS AND ITEMS GO HERE. Example:
+<div class="topic">Developer Tools</div>
+<div class="item" onclick="toggleHighlight(this)">
+  <div class="item-title">Product Name</div>
+  <div class="item-meta">
+    <span>0 votes</span>
+    <span class="type-tag">SaaS, AI</span>
+  </div>
+  <div class="item-desc">Product description.</div>
+  <a class="item-link" href="https://producthunt.com/..." target="_blank" onclick="event.stopPropagation()">producthunt.com - Product</a>
+</div>
+-->
+
+<!-- EVERY SECTION -->
+<div class="platform-header"><h2>Every.to<span class="pcount"><!-- COUNT or FAILED --></span></h2></div>
+<!-- If failed:
+<div class="fail-note">HTTP 500 Internal Server Error — likely a temporary outage on their side.</div>
+-->
+<!-- If OK, items go here same pattern as above -->
+
+<!-- HACKERNEWS SECTION -->
+<div class="platform-header"><h2>HN Blogs<span class="pcount"><!-- COUNT --> posts</span></h2></div>
+<!-- TOPIC GROUPS AND ITEMS GO HERE. Example:
+<div class="topic">Apple at 50</div>
+<div class="item" onclick="toggleHighlight(this)">
+  <div class="item-title">Post Title</div>
+  <div class="item-meta"><span class="author">blogname.com</span></div>
+  <a class="item-link" href="https://..." target="_blank" onclick="event.stopPropagation()">blogname.com - post</a>
+</div>
+-->
+
+<!-- KICKSTARTER SECTION -->
+<div class="platform-header"><h2>Kickstarter<span class="pcount"><!-- COUNT --> projects</span></h2></div>
+<!-- ITEMS GO HERE. Example:
+<div class="item" onclick="toggleHighlight(this)">
+  <div class="item-title">Project Name (Staff Pick)</div>
+  <div class="item-meta">
+    <span class="type-tag">281% funded</span>
+    <span>$141K / $50K</span>
+    <span>2,872 backers</span>
+    <span>28d left</span>
+  </div>
+  <a class="item-link" href="https://kickstarter.com/..." target="_blank" onclick="event.stopPropagation()">kickstarter.com - Project</a>
+</div>
+-->
+
+<!-- ACTION BAR -->
+<div class="action-bar">
+  <button class="action-btn" onclick="clearHighlights()">Clear All</button>
+  <button class="action-btn" id="toggleBtn" onclick="showHighlightedOnly()">Show Selected</button>
+  <button class="action-btn primary" onclick="copyHighlights()">Copy Links</button>
+</div>
+
+<script>
+let showingSelected = false;
+
+function toggleHighlight(el) {
+  if (event && event.target.tagName === 'A') return;
+  el.classList.toggle('highlighted');
+  updateCounter();
+}
+
+function updateCounter() {
+  const counter = document.getElementById('highlightCount');
+  counter.textContent = document.querySelectorAll('.item.highlighted').length;
+  counter.classList.add('pop');
+  setTimeout(() => counter.classList.remove('pop'), 150);
+}
+
+function clearHighlights() {
+  document.querySelectorAll('.item.highlighted').forEach(el => el.classList.remove('highlighted'));
+  updateCounter();
+  if (showingSelected) showAll();
+}
+
+function showHighlightedOnly() {
+  if (showingSelected) { showAll(); return; }
+  showingSelected = true;
+  document.querySelectorAll('.item').forEach(el => {
+    if (!el.classList.contains('highlighted')) el.style.display = 'none';
+  });
+  document.querySelectorAll('.topic').forEach(el => el.style.display = 'none');
+  document.getElementById('toggleBtn').textContent = 'Show All';
+}
+
+function showAll() {
+  showingSelected = false;
+  document.querySelectorAll('.item').forEach(el => el.style.display = '');
+  document.querySelectorAll('.topic').forEach(el => el.style.display = '');
+  document.getElementById('toggleBtn').textContent = 'Show Selected';
+}
+
+function copyHighlights() {
+  const links = [];
+  document.querySelectorAll('.item.highlighted').forEach(el => {
+    const link = el.querySelector('.item-link');
+    const title = el.querySelector('.item-title');
+    if (link && title) links.push(title.textContent.trim() + '\n' + link.href);
+  });
+  if (links.length === 0) { alert('No items highlighted yet. Tap items to select them.'); return; }
+  const text = links.join('\n\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy Links', 1500);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy Links', 1500);
+  });
+}
+</script>
+
+</body>
+</html>

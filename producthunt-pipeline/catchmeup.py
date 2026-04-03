@@ -15,6 +15,7 @@ load_dotenv(SCRIPT_DIR / ".env")
 
 API_URL = "https://api.producthunt.com/v2/api/graphql"
 API_KEY = os.getenv("PRODUCTHUNT_API_KEY", "")
+OUTPUT_FILE = SCRIPT_DIR / "output.json"
 
 # Product Hunt's daily cycle resets at midnight Pacific Time.
 PT = timezone(timedelta(hours=-7))
@@ -98,12 +99,9 @@ def fetch_products_for_date(date_pt):
 
 
 def fetch_products():
-    """Fetch today's products; fall back to yesterday if today has none yet."""
-    today_pt = datetime.now(PT).date()
-    products, date_used = fetch_products_for_date(today_pt)
-    if not products:
-        yesterday = today_pt - timedelta(days=1)
-        products, date_used = fetch_products_for_date(yesterday)
+    """Fetch yesterday's products so votes have had time to accumulate."""
+    yesterday_pt = datetime.now(PT).date() - timedelta(days=1)
+    products, date_used = fetch_products_for_date(yesterday_pt)
     return products, date_used
 
 
@@ -143,6 +141,35 @@ def main():
     print(f"{'=' * 70}")
     print(f"  {len(products)} products")
     print(f"{'=' * 70}")
+
+    # Write JSON output
+    json_items = []
+    for p in products:
+        topics = [t["node"]["name"] for t in p.get("topics", {}).get("edges", [])]
+        tagline = p.get("tagline", "")
+        desc = p.get("description", "") or ""
+        description = f"{tagline} -- {desc}" if desc and desc != tagline else tagline
+        json_items.append({
+            "title": p["name"],
+            "url": p["url"],
+            "author": "",
+            "date": date_used.isoformat(),
+            "description": description[:300],
+            "meta": {
+                "tagline": tagline,
+                "votes": p.get("votesCount", 0),
+                "categories": topics,
+            },
+        })
+    output = {
+        "pipeline": "producthunt",
+        "status": "ok",
+        "count": len(json_items),
+        "since": "",
+        "items": json_items,
+    }
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":

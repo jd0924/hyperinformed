@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E — Swiss Grid</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  :root {
+    --bg: #0f0f0f; --surface: #181818; --text: #ededed; --dim: #777;
+    --accent: #4f8ff7; --hl-bg: rgba(79,143,247,0.06); --hl-border: #4f8ff7;
+    --divider: #222;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.55; padding-bottom:80px; }
+  header { position:sticky; top:0; z-index:100; background:rgba(15,15,15,0.95); backdrop-filter:blur(10px); padding:14px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--divider); }
+  header h1 { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:3px; }
+  .date { font-size:11px; color:var(--dim); font-weight:500; }
+  .counter { background:var(--accent); color:#fff; font-size:11px; font-weight:700; padding:4px 12px; border-radius:4px; }
+  .platform-header { padding:28px 20px 10px; position:sticky; top:48px; z-index:50; background:rgba(15,15,15,0.97); display:flex; align-items:baseline; gap:12px; border-bottom:2px solid var(--accent); }
+  .platform-header h2 { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:4px; color:var(--accent); }
+  .count { font-size:11px; color:var(--dim); font-weight:500; }
+  .topic { padding:16px 20px 6px; font-size:10px; font-weight:700; color:var(--dim); text-transform:uppercase; letter-spacing:2px; }
+  .item { padding:14px 20px; border-bottom:1px solid var(--divider); cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none; position:relative; display:grid; grid-template-columns:1fr; gap:2px; border-left:3px solid transparent; transition:all 0.15s; }
+  .item:active { background:var(--surface); }
+  .item.hl { background:var(--hl-bg); border-left-color:var(--hl-border); }
+  .item.hl::after { content:''; position:absolute; top:16px; right:18px; width:6px; height:6px; border-radius:2px; background:var(--accent); }
+  .title { font-size:14px; font-weight:600; line-height:1.45; letter-spacing:-0.2px; }
+  .meta { font-size:11px; color:var(--dim); display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-weight:500; }
+  .meta .author { color:var(--accent); font-weight:700; }
+  .tag { border:1px solid var(--accent); color:var(--accent); padding:1px 6px; border-radius:3px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+  .desc { font-size:13px; color:var(--dim); line-height:1.55; }
+  a.link { display:inline-block; margin-top:6px; font-size:11px; color:var(--accent); text-decoration:none; font-weight:500; }
+  .bar { position:fixed; bottom:0; left:0; right:0; background:rgba(15,15,15,0.95); backdrop-filter:blur(10px); border-top:1px solid var(--divider); padding:12px 20px; display:flex; gap:10px; z-index:200; }
+  .btn { flex:1; padding:10px; border-radius:6px; border:1px solid var(--divider); background:transparent; color:var(--text); font-size:11px; font-weight:700; cursor:pointer; text-align:center; text-transform:uppercase; letter-spacing:1px; font-family:inherit; }
+  .btn.pri { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .label { text-align:center; padding:40px 16px 10px; font-size:22px; font-weight:800; color:var(--dim); letter-spacing:-0.5px; opacity:0.5; }
+</style>
+</head>
+<body>
+<div class="label">E — Swiss Grid</div>
+<header>
+  <div><h1>Catch Me Up</h1><div class="date">01 Apr - 02 Apr 2026</div></div>
+  <div class="counter" id="c">0</div>
+</header>
+
+<div class="platform-header"><h2>YouTube</h2><span class="count">20 videos</span></div>
+<div class="topic">AI Agents & Enterprise</div>
+<div class="item" onclick="t(this)">
+  <div class="title">How to Reorg After AI Changes Everything | Block's Owen Jennings</div>
+  <div class="meta"><span class="author">a16z</span><span class="tag">Video</span><span>27:17</span></div>
+  <div class="desc">Block rebuilt around AI agents, small squads, and internal tools like Goose and Builder Bot.</div>
+  <a class="link" href="#" onclick="event.stopPropagation()">youtube.com/watch?v=krdrkl38nRw</a>
+</div>
+
+<div class="platform-header"><h2>Twitter / X</h2><span class="count">167 tweets</span></div>
+<div class="topic">Artemis II Moon Launch</div>
+<div class="item" onclick="t(this)">
+  <div class="title">For the first time in over 50 years, humans are Moonbound.</div>
+  <div class="meta"><span class="author">@NASA</span><span>95,572 likes</span></div>
+  <div class="desc">NASA's SLS rocket and Orion spacecraft lifted off sending four astronauts on a test flight around the Moon.</div>
+  <a class="link" href="#" onclick="event.stopPropagation()">x.com/NASA/status/2039490150237909144</a>
+</div>
+
+<div class="platform-header"><h2>GitHub</h2><span class="count">43 repos</span></div>
+<div class="topic">Trending Today</div>
+<div class="item" onclick="t(this)">
+  <div class="title">microsoft/VibeVoice</div>
+  <div class="meta"><span class="tag">Python</span><span>34,856 stars</span></div>
+  <div class="desc">Open-source frontier voice AI.</div>
+  <a class="link" href="#" onclick="event.stopPropagation()">github.com/microsoft/VibeVoice</a>
+</div>
+
+<div class="bar">
+  <button class="btn" onclick="document.querySelectorAll('.hl').forEach(e=>e.classList.remove('hl'));u()">Clear</button>
+  <button class="btn">Selected</button>
+  <button class="btn pri">Copy Links</button>
+</div>
+<script>function t(e){e.classList.toggle('hl');u()}function u(){document.getElementById('c').textContent=document.querySelectorAll('.hl').length}</script>
+</body>
+</html>

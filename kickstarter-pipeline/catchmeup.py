@@ -8,6 +8,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
+OUTPUT_FILE = SCRIPT_DIR / "output.json"
 
 DISCOVER_URL = "https://www.kickstarter.com/discover/advanced.json"
 HEADERS = {
@@ -145,6 +146,36 @@ def main():
     print(f"{'=' * 70}")
     print(f"  {len(projects)} new project(s)")
     print(f"{'=' * 70}")
+
+    # Write JSON output
+    json_items = [
+        {
+            "title": p["name"],
+            "url": p["url"],
+            "author": "",
+            "date": p["launched"],
+            "description": p["blurb"],
+            "meta": {
+                "pct_funded": p["pct_funded"],
+                "pledged": format_currency(p["pledged"], p["symbol"]),
+                "goal": format_currency(p["goal"], p["symbol"]),
+                "backers": p["backers"],
+                "days_left": p["days_left"],
+                "category": p["category"],
+                "staff_pick": p["staff_pick"],
+            },
+        }
+        for p in projects
+    ]
+    output = {
+        "pipeline": "kickstarter",
+        "status": "ok",
+        "count": len(json_items),
+        "since": since.isoformat().replace("+00:00", "Z"),
+        "items": json_items,
+    }
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(output, f, indent=2)
 
     save_last_run()
 

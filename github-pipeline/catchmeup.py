@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 
 SCRIPT_DIR = Path(__file__).parent
 LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
+OUTPUT_FILE = SCRIPT_DIR / "output.json"
 
 
 def _fetch(url):
@@ -153,6 +154,53 @@ def main():
     print(f"{'=' * 70}")
     print(f"  {len(trending)} trending | {len(updates)} starred with updates")
     print(f"{'=' * 70}")
+
+    # Write JSON output
+    def parse_stars(s):
+        s = str(s).replace(",", "").strip()
+        try:
+            return int(s)
+        except ValueError:
+            return 0
+
+    json_items = []
+    for r in trending[:25]:
+        json_items.append({
+            "title": r["name"],
+            "url": f"https://github.com/{r['name']}",
+            "author": r["name"].split("/")[0] if "/" in r["name"] else r["name"],
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "description": r.get("desc", "")[:120],
+            "meta": {
+                "section": "trending",
+                "language": r.get("lang") or None,
+                "stars": parse_stars(r.get("stars", 0)),
+                "releases": [],
+            },
+        })
+    for u in updates:
+        json_items.append({
+            "title": u["name"],
+            "url": f"https://github.com/{u['name']}",
+            "author": u["name"].split("/")[0] if "/" in u["name"] else u["name"],
+            "date": u["pushed"],
+            "description": u.get("desc", "")[:120],
+            "meta": {
+                "section": "starred",
+                "language": None,
+                "stars": u.get("stars", 0),
+                "releases": u.get("releases", []),
+            },
+        })
+    output = {
+        "pipeline": "github",
+        "status": "ok",
+        "count": len(json_items),
+        "since": since.isoformat().replace("+00:00", "Z"),
+        "items": json_items,
+    }
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(output, f, indent=2)
 
     save_last_run()
 

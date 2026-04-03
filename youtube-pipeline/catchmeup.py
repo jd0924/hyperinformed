@@ -18,6 +18,7 @@ load_dotenv(SCRIPT_DIR / ".env")
 
 SUBS_FILE = SCRIPT_DIR / "subscriptions.csv"
 LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
+OUTPUT_FILE = SCRIPT_DIR / "output.json"
 API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 API_BASE = "https://www.googleapis.com/youtube/v3"
 
@@ -267,6 +268,31 @@ def main():
     print(f"  {total} new video(s) across {len(channels)} channels ({errors} errors)")
     print(f"  {videos_count} videos, {shorts_count} shorts, {streams_count} streams")
     print(f"{'=' * 70}")
+
+    # Write JSON output
+    json_items = [
+        {
+            "title": v["title"],
+            "url": v["url"],
+            "author": v["channel"],
+            "date": v["date"],
+            "description": v.get("description", "")[:200],
+            "meta": {
+                "type": v.get("type", "VIDEO"),
+                "duration": v.get("duration", "0:00"),
+            },
+        }
+        for v in all_videos
+    ]
+    output = {
+        "pipeline": "youtube",
+        "status": "ok",
+        "count": len(json_items),
+        "since": since.isoformat().replace("+00:00", "Z"),
+        "items": json_items,
+    }
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(output, f, indent=2)
 
     save_last_run()
 

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A — Dark Terminal</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --dim: #8b949e; --accent: #58a6ff;
+    --hl-bg: #1a3a2a; --hl-border: #2ea043;
+    --tag-bg: #1f2a3d; --tag-text: #79c0ff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding-bottom:70px; -webkit-text-size-adjust:100%; }
+  header { position:sticky; top:0; z-index:100; background:rgba(13,17,23,0.92); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:17px; font-weight:700; }
+  .date { font-size:13px; color:var(--dim); }
+  .counter { background:var(--hl-border); color:#fff; font-size:12px; font-weight:700; padding:4px 10px; border-radius:12px; }
+  .platform-header { display:flex; align-items:center; gap:10px; padding:14px 16px; position:sticky; top:49px; z-index:50; background:rgba(13,17,23,0.95); backdrop-filter:blur(8px); border-bottom:1px solid var(--border); }
+  .platform-icon { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; color:#fff; flex-shrink:0; }
+  .platform-header h2 { font-size:16px; font-weight:700; }
+  .count { font-size:12px; color:var(--dim); background:#1c2333; padding:2px 8px; border-radius:8px; }
+  .topic { padding:10px 16px 6px; font-size:13px; font-weight:700; color:var(--dim); text-transform:uppercase; letter-spacing:0.8px; }
+  .item { padding:12px 16px; border-bottom:1px solid rgba(48,54,61,0.4); cursor:pointer; border-left:3px solid transparent; -webkit-tap-highlight-color:transparent; user-select:none; position:relative; }
+  .item:active { background:var(--surface); }
+  .item.hl { background:var(--hl-bg); border-left-color:var(--hl-border); }
+  .item.hl::after { content:''; position:absolute; top:12px; right:14px; width:8px; height:8px; border-radius:50%; background:var(--hl-border); }
+  .title { font-size:15px; font-weight:600; line-height:1.4; }
+  .meta { font-size:12px; color:var(--dim); display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:2px; }
+  .meta .author { color:var(--accent); font-weight:600; }
+  .tag { background:var(--tag-bg); color:var(--tag-text); padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; }
+  .desc { font-size:13.5px; color:var(--dim); line-height:1.5; margin-top:3px; }
+  a.link { display:inline-block; margin-top:6px; font-size:12px; color:var(--accent); text-decoration:none; }
+  .bar { position:fixed; bottom:0; left:0; right:0; background:rgba(22,27,34,0.95); backdrop-filter:blur(12px); border-top:1px solid var(--border); padding:10px 16px; display:flex; gap:10px; z-index:200; }
+  .btn { flex:1; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; font-weight:600; cursor:pointer; text-align:center; }
+  .btn.pri { background:var(--hl-border); border-color:var(--hl-border); color:#fff; }
+  .label { text-align:center; padding:40px 16px 10px; font-size:22px; font-weight:800; color:var(--dim); letter-spacing:-0.5px; opacity:0.5; }
+</style>
+</head>
+<body>
+<div class="label">A — Dark Terminal</div>
+<header>
+  <div><h1>Catch Me Up</h1><div class="date">Apr 1-2, 2026</div></div>
+  <div class="counter" id="c">0</div>
+</header>
+
+<div class="platform-header"><div class="platform-icon" style="background:#c00">YT</div><h2>YouTube</h2><span class="count">20</span></div>
+<div class="topic">AI Agents & Enterprise</div>
+<div class="item" onclick="t(this)">
+  <div class="title">How to Reorg After AI Changes Everything | Block's Owen Jennings</div>
+  <div class="meta"><span class="author">a16z</span><span class="tag">VIDEO</span><span>27:17</span></div>
+  <div class="desc">Block rebuilt around AI agents, small squads, and internal tools like Goose and Builder Bot.</div>
+  <a class="link" href="#" onclick="event.stopPropagation()">youtube.com/watch?v=krdrkl38nRw</a>
+</div>
+
+<div class="platform-header"><div class="platform-icon" style="background:#1d9bf0">X</div><h2>Twitter/X</h2><span class="count">167</span></div>
+<div class="topic">Artemis II Moon Launch</div>
+<div class="item" onclick="t(this)">
+  <div class="title">For the first time in over 50 years, humans are Moonbound.</div>
+  <div class="meta"><span class="author">@NASA</span><span>95,572 likes</span></div>
+  <div class="desc">NASA's SLS rocket and Orion spacecraft lifted off sending four astronauts on a test flight around the Moon.</div>
+  <a class="link" href="#" onclick="event.stopPropagation()">x.com/NASA/status/2039490150237909144</a>
+</div>
+
+<div class="platform-header"><div class="platform-icon" style="background:#238636">GH</div><h2>GitHub</h2><span class="count">43</span></div>
+<div class="topic">Trending Today</div>
+<div class="item" onclick="t(this)">
+  <div class="title">microsoft/VibeVoice</div>
+  <div class="meta"><span class="tag">Python</span><span>34,856 stars</span></div>
+  <div class="desc">Open-source frontier voice AI.</div>
+  <a class="link" href="#" onclick="event.stopPropagation()">github.com/microsoft/VibeVoice</a>
+</div>
+
+<div class="bar">
+  <button class="btn" onclick="document.querySelectorAll('.hl').forEach(e=>e.classList.remove('hl'));u()">Clear</button>
+  <button class="btn">Selected</button>
+  <button class="btn pri">Copy Links</button>
+</div>
+<script>function t(e){e.classList.toggle('hl');u()}function u(){document.getElementById('c').textContent=document.querySelectorAll('.hl').length}</script>
+</body>
+</html>
