@@ -99,9 +99,9 @@ def fetch_products_for_date(date_pt):
 
 
 def fetch_products():
-    """Fetch yesterday's products so votes have had time to accumulate."""
-    yesterday_pt = datetime.now(PT).date() - timedelta(days=1)
-    products, date_used = fetch_products_for_date(yesterday_pt)
+    """Fetch yesterday's products (UTC) so votes have had time to accumulate."""
+    yesterday_utc = datetime.now(timezone.utc).date() - timedelta(days=1)
+    products, date_used = fetch_products_for_date(yesterday_utc)
     return products, date_used
 
 

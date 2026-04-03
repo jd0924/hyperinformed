@@ -13,6 +13,8 @@ twitter-pipeline/accounts.txt
 # Generated reports (contain personal feed data)
 catchmeup-*.md
 catchmeup-*.html
+catchmeup-*.mp3
+catchmeup-*.narration.txt
 
 # Runtime state
 */last_run.txt

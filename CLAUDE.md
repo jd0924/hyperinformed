@@ -16,12 +16,15 @@ Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt +
 When the user says "catch me up", run `/catchmeup`. Follow these steps exactly:
 
 1. **Fetch** — Run all 7 pipeline scripts in parallel. Each writes `output.json` with structured data. If one fails, it exits cleanly with `status: "error"` in its JSON. No pipeline can crash another.
-2. **Group & Write** — Read the 7 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. Fill in `templates/report-template.html` with all items. Save as `catchmeup-<start>-to-<end>.html`. Do NOT rewrite CSS/JS — only fill content blocks.
+2. **Group & Write** — Read the 7 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. Produce **two files in the same pass** (guarantees identical content/ordering):
+   - `catchmeup-<start>-to-<end>.html` — fill in `templates/report-template.html` content blocks. Set the `<!-- AUDIO_FILE -->` placeholder to the MP3 filename.
+   - `catchmeup-<start>-to-<end>.narration.txt` — spoken narration script (see Narration Format below).
 3. **Cross-check** — Run `python3 crosscheck.py <report.html>`. It verifies per-platform item counts, URLs, and authors between JSON and HTML. If ANY check fails, fix the HTML before showing the report.
-4. **Open** — Open the HTML in the browser for the user.
-5. If 0 new items from a source, note they're caught up and when last run was.
-6. **Report pipeline failures** at the top of the status table: which pipeline failed, the error, and the likely reason.
-7. **Include everything except ads** — RTs, reposts, quotes, low-engagement posts all stay in. Only filter out pure advertisements with zero informational value.
+4. **Generate audio** — Run `python3 tts-generate.py <narration.txt>`. Produces `catchmeup-<start>-to-<end>.mp3` using Kokoro TTS (~3-4 min).
+5. **Open** — Open the HTML in the browser. The embedded audio player loads the MP3 automatically.
+6. If 0 new items from a source, note they're caught up and when last run was.
+7. **Report pipeline failures** at the top of the status table: which pipeline failed, the error, and the likely reason.
+8. **Include everything except ads** — RTs, reposts, quotes, low-engagement posts all stay in. Only filter out pure advertisements with zero informational value.
 
 ## Report Format Rules
 
@@ -97,6 +100,38 @@ Run `python3 crosscheck.py <report.html>` after every report. It checks:
 3. **Author matching** — every author from JSON must appear in the HTML
 
 If ANY check fails, fix the HTML and re-run before showing the report to the user. Do NOT silently drop items.
+
+## Narration Format
+
+The narration file (`catchmeup-<date>.narration.txt`) uses markers for the TTS script to insert pauses:
+
+- `[SECTION] Platform Name` — 1.5s silence before, announces the platform
+- `[TOPIC] Topic Name` — 0.8s silence before, announces the topic group
+- `[PAUSE]` — 0.4s silence between items
+
+### Narration Style Rules
+- **No URLs** — never speak a URL
+- **No formatting artifacts** — no brackets, no HTML tags, no entities
+- **No @ symbols** — say "Elon Musk" not "at elon musk"
+- **Natural durations** — "a 1 hour 40 minute video" not "1:39:51"
+- **Natural numbers** — "about 35,000 stars" not "34,856 stars"
+- **Strip emojis** — they cannot be spoken
+- **Every item must appear** — same order as HTML, same platforms, same topic groups
+- **Brief per item** — title + author + type + one-sentence description (~15-25 words per item)
+- **Section transitions** — "Moving to Twitter." / "Now, GitHub trending repos."
+- **Topic transitions** — "In AI and Agents..." / "Under Developer Tools..."
+
+### Example
+```
+[SECTION] YouTube
+[TOPIC] AI and Agents
+From Lenny's Podcast, a 1 hour 40 minute video. An AI state of the union. Simon Willison covers agentic engineering and dark factories.
+[PAUSE]
+From a16z, a 42 minute video. How bots, deepfakes, and AI agents are forcing a new internet identity layer.
+```
+
+### TTS Generation
+Run `python3 tts-generate.py <narration.txt>` — uses Kokoro TTS model at `models/kokoro/`. Default voice: `af_heart`. Override with `--voice am_adam` etc.
 
 ## Git & Security Rules
 

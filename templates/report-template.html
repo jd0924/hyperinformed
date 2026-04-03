@@ -38,6 +38,39 @@
   }
   .counter.pop { transform: scale(1.2); }
 
+  /* Audio Player Dashboard */
+  .audio-player {
+    position: sticky; top: 54px; z-index: 90;
+    background: rgba(17,17,17,0.97); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--divider);
+    padding: 10px 20px; display: flex; align-items: center; gap: 12px;
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+  .audio-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--accent); border: none; color: #111;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; -webkit-tap-highlight-color: transparent;
+  }
+  .audio-btn:active { opacity: 0.8; }
+  .audio-progress {
+    flex: 1; height: 3px; background: rgba(255,255,255,0.1);
+    border-radius: 2px; overflow: hidden; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .audio-progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+  .audio-time { font-size: 11px; color: var(--dim); white-space: nowrap; }
+  .audio-speed {
+    font-family: -apple-system, system-ui, sans-serif;
+    font-size: 10px; color: var(--dim); background: transparent;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+    padding: 3px 7px; cursor: pointer; font-weight: 600;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .audio-speed:active { background: rgba(255,255,255,0.05); }
+  body.has-audio .platform-header { top: 110px; }
+
   /* Pipeline Status Table */
   .status-table { margin: 16px 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--divider); }
   .status-row {
@@ -160,6 +193,17 @@
   </div>
 </header>
 
+<!-- AUDIO PLAYER -->
+<div class="audio-player" id="audioPlayerUI" style="display:none">
+  <button class="audio-btn" id="playPauseBtn" onclick="toggleAudio()">&#9654;</button>
+  <div class="audio-progress" onclick="seekAudio(event)">
+    <div class="audio-progress-fill" id="progressFill"></div>
+  </div>
+  <span class="audio-time" id="audioTime">0:00 / 0:00</span>
+  <button class="audio-speed" onclick="cycleSpeed()">1x</button>
+</div>
+<audio id="audioEl" src="<!-- AUDIO_FILE -->" preload="auto"></audio>
+
 <!-- PIPELINE STATUS -->
 <div class="status-table">
   <!-- One row per pipeline. Example:
@@ -281,6 +325,51 @@
 </div>
 
 <script>
+// Audio player
+const audioEl = document.getElementById('audioEl');
+const audioUI = document.getElementById('audioPlayerUI');
+const playPauseBtn = document.getElementById('playPauseBtn');
+const speeds = [1, 1.25, 1.5, 1.75, 2];
+let speedIdx = 0;
+
+audioEl.addEventListener('loadedmetadata', () => {
+  audioUI.style.display = 'flex';
+  document.body.classList.add('has-audio');
+});
+audioEl.addEventListener('error', () => {
+  audioUI.style.display = 'none';
+  document.body.classList.remove('has-audio');
+});
+audioEl.addEventListener('timeupdate', () => {
+  const pct = (audioEl.currentTime / audioEl.duration * 100) || 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('audioTime').textContent =
+    fmtTime(audioEl.currentTime) + ' / ' + fmtTime(audioEl.duration);
+});
+audioEl.addEventListener('ended', () => {
+  playPauseBtn.textContent = '\u25B6';
+});
+
+function toggleAudio() {
+  if (audioEl.paused) { audioEl.play(); playPauseBtn.textContent = '\u23F8'; }
+  else { audioEl.pause(); playPauseBtn.textContent = '\u25B6'; }
+}
+function seekAudio(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  audioEl.currentTime = (e.clientX - rect.left) / rect.width * audioEl.duration;
+}
+function cycleSpeed() {
+  speedIdx = (speedIdx + 1) % speeds.length;
+  audioEl.playbackRate = speeds[speedIdx];
+  document.querySelector('.audio-speed').textContent = speeds[speedIdx] + 'x';
+}
+function fmtTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+
+// Highlight system
 let showingSelected = false;
 
 function toggleHighlight(el) {
