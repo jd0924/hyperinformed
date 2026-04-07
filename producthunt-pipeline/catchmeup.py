@@ -99,9 +99,14 @@ def fetch_products_for_date(date_pt):
 
 
 def fetch_products():
-    """Fetch yesterday's products (UTC) so votes have had time to accumulate."""
-    yesterday_utc = datetime.now(timezone.utc).date() - timedelta(days=1)
-    products, date_used = fetch_products_for_date(yesterday_utc)
+    """Fetch products from 2 days ago UTC so votes have had a full day to accumulate.
+
+    PH's daily cycle resets at midnight PT (UTC-7). From Shanghai (UTC+8),
+    'yesterday UTC' is the day that just ended in PT — votes are still fresh.
+    Going back 2 days ensures a fully completed vote cycle regardless of timezone.
+    """
+    target_date = datetime.now(timezone.utc).date() - timedelta(days=2)
+    products, date_used = fetch_products_for_date(target_date)
     return products, date_used
 
 

@@ -16,11 +16,11 @@ Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt +
 When the user says "catch me up", run `/catchmeup`. Follow these steps exactly:
 
 1. **Fetch** — Run all 7 pipeline scripts in parallel. Each writes `output.json` with structured data. If one fails, it exits cleanly with `status: "error"` in its JSON. No pipeline can crash another.
-2. **Group & Write** — Read the 7 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. Produce **two files in the same pass** (guarantees identical content/ordering):
-   - `catchmeup-<start>-to-<end>.html` — fill in `templates/report-template.html` content blocks. Set the `<!-- AUDIO_FILE -->` placeholder to the MP3 filename.
+2. **Group & Write** — Read the 7 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. This is an intellectual step — do NOT use an automated script. Produce **two files in the same pass** (guarantees identical content/ordering):
+   - `catchmeup-<start>-to-<end>.html` — fill in `templates/report-template.html` content blocks directly. Set the `<!-- AUDIO_FILE -->` placeholder to the MP3 filename. Do NOT rewrite the CSS or JavaScript.
    - `catchmeup-<start>-to-<end>.narration.txt` — spoken narration script (see Narration Format below).
 3. **Cross-check** — Run `python3 crosscheck.py <report.html>`. It verifies per-platform item counts, URLs, and authors between JSON and HTML. If ANY check fails, fix the HTML before showing the report.
-4. **Generate audio** — Run `python3 tts-generate.py <narration.txt>`. Produces `catchmeup-<start>-to-<end>.mp3` using Kokoro TTS (~3-4 min).
+4. **Generate audio** — Run `python3 tts-generate-say.py <narration.txt>`. Produces `catchmeup-<start>-to-<end>.mp3` using macOS Ava (Premium) voice (~8-10 min).
 5. **Open** — Open the HTML in the browser. The embedded audio player loads the MP3 automatically.
 6. If 0 new items from a source, note they're caught up and when last run was.
 7. **Report pipeline failures** at the top of the status table: which pipeline failed, the error, and the likely reason.
@@ -37,6 +37,7 @@ Use `templates/report-template.html` as the base. Copy it, fill in the content b
 - **Tap-to-highlight items** — tapping an item toggles an amber highlight (border + dot). Tapping a link follows it; tapping anywhere else toggles highlight.
 - **All links clickable** — every URL opens in a new tab (`target="_blank"`)
 - **Sticky header** with live highlight counter badge
+- **Audio player dashboard** — play/pause, skip ±5s, seekable progress bar, speed control (1x/1.25x/1.5x/1.75x/2x), time display
 - **Bottom action bar** — Clear All, Show Selected (filter to highlighted only), Copy Links (copies title + URL for all highlighted items)
 - **Dark theme, phone-optimized** — serif + system font stack, comfortable tap targets, no horizontal scroll
 - **Pipeline Status dashboard** at the top — show each pipeline's status (OK/FAILED) and item count
@@ -111,11 +112,12 @@ The narration file (`catchmeup-<date>.narration.txt`) uses markers for the TTS s
 
 ### Narration Style Rules
 - **No URLs** — never speak a URL
-- **No formatting artifacts** — no brackets, no HTML tags, no entities
+- **No formatting artifacts** — no brackets, no HTML tags, no HTML entities (`&amp;` → "and", `&gt;` → remove)
 - **No @ symbols** — say "Elon Musk" not "at elon musk"
 - **Natural durations** — "a 1 hour 40 minute video" not "1:39:51"
 - **Natural numbers** — "about 35,000 stars" not "34,856 stars"
 - **Strip emojis** — they cannot be spoken
+- **Keep currency symbols** — say "35 thousand dollars" not "35 thousand"
 - **Every item must appear** — same order as HTML, same platforms, same topic groups
 - **Brief per item** — title + author + type + one-sentence description (~15-25 words per item)
 - **Section transitions** — "Moving to Twitter." / "Now, GitHub trending repos."
@@ -131,7 +133,7 @@ From a16z, a 42 minute video. How bots, deepfakes, and AI agents are forcing a n
 ```
 
 ### TTS Generation
-Run `python3 tts-generate.py <narration.txt>` — uses Kokoro TTS model at `models/kokoro/`. Default voice: `af_heart`. Override with `--voice am_adam` etc.
+Run `python3 tts-generate-say.py <narration.txt>` — uses macOS `say` command with Ava (Premium) voice. Override with `--voice "Tom (Premium)"` etc. Requires the Premium voice to be downloaded in System Settings > Accessibility > Spoken Content > Manage Voices.
 
 ## Git & Security Rules
 

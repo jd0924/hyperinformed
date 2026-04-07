@@ -42,12 +42,17 @@ def format_currency(amount, symbol="$"):
     return f"{symbol}{amount:,.0f}"
 
 
-def fetch_projects(since):
-    """Fetch trending live projects launched since the last run."""
+def fetch_projects():
+    """Fetch top live projects by popularity. No date filter — repetition is a signal.
+
+    Projects that appear repeatedly across runs are gaining real traction.
+    Sorted by popularity (most backers + funding velocity).
+    Limited to top 20 to keep the report focused.
+    """
     all_projects = []
 
-    for page in range(1, 11):  # safety cap
-        params = f"?sort=magic&state=live&page={page}"
+    for page in range(1, 3):  # 2 pages, take top 20
+        params = f"?sort=popularity&state=live&page={page}"
         req = urllib.request.Request(DISCOVER_URL + params, headers=HEADERS)
         try:
             resp = urllib.request.urlopen(req, timeout=15)
@@ -60,15 +65,12 @@ def fetch_projects(since):
         if not projects:
             break
 
-        old_count = 0
         for p in projects:
             launched_at = p.get("launched_at")
-            if launched_at is None:
-                continue
-            launched = datetime.fromtimestamp(launched_at, tz=timezone.utc)
-            if launched <= since:
-                old_count += 1
-                continue
+            launched = (
+                datetime.fromtimestamp(launched_at, tz=timezone.utc)
+                if launched_at else None
+            )
 
             goal = p.get("goal", 0)
             pledged = p.get("pledged", 0)
@@ -98,35 +100,24 @@ def fetch_projects(since):
                 "backers": p.get("backers_count", 0),
                 "staff_pick": p.get("staff_pick", False),
                 "days_left": days_left,
-                "launched": launched.strftime("%Y-%m-%d"),
+                "launched": launched.strftime("%Y-%m-%d") if launched else "",
                 "url": p.get("urls", {}).get("web", {}).get("project", ""),
             })
 
-        # Stop paginating if most projects on this page predate last run
-        if old_count > len(projects) * 0.8:
-            break
-
-    # Sort by percent funded (most traction first)
+    # Sort by percent funded (most traction first), take top 20
     all_projects.sort(key=lambda x: x["pct_funded"], reverse=True)
-    return all_projects
+    return all_projects[:20]
 
 
 def main():
-    since = get_last_run()
-    first_run = not LAST_RUN_FILE.exists()
-
     print(f"{'=' * 70}")
-    print(f"  KICKSTARTER — TRENDING PROJECTS")
-    if first_run:
-        print(f"  First run — showing projects launched in the last 7 days")
-    else:
-        print(f"  Since {since.strftime('%Y-%m-%d %H:%M UTC')}")
+    print(f"  KICKSTARTER — TOP LIVE PROJECTS BY POPULARITY")
     print(f"{'=' * 70}\n")
 
-    projects = fetch_projects(since)
+    projects = fetch_projects()
 
     if not projects:
-        print("  No new trending projects found.\n")
+        print("  No projects found.\n")
     else:
         for i, p in enumerate(projects, 1):
             cat = f"  [{p['category']}]" if p["category"] else ""
@@ -144,7 +135,7 @@ def main():
             print()
 
     print(f"{'=' * 70}")
-    print(f"  {len(projects)} new project(s)")
+    print(f"  {len(projects)} project(s)")
     print(f"{'=' * 70}")
 
     # Write JSON output
@@ -171,7 +162,7 @@ def main():
         "pipeline": "kickstarter",
         "status": "ok",
         "count": len(json_items),
-        "since": since.isoformat().replace("+00:00", "Z"),
+        "since": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "items": json_items,
     }
     with open(OUTPUT_FILE, "w") as f:
