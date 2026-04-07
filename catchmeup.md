@@ -8,13 +8,13 @@ If arguments are provided, only run the specified platform(s). If no arguments, 
 
 | Argument | Script |
 |----------|--------|
-| youtube | `python3 /Users/reggin003/hyperinformed/youtube-pipeline/catchmeup.py` |
-| twitter, x | `python3 /Users/reggin003/hyperinformed/twitter-pipeline/catchmeup.py` |
-| github, gh | `python3 /Users/reggin003/hyperinformed/github-pipeline/catchmeup.py` |
-| producthunt, ph | `python3 /Users/reggin003/hyperinformed/producthunt-pipeline/catchmeup.py` |
-| every | `python3 /Users/reggin003/hyperinformed/every-pipeline/catchmeup.py` |
-| hackernews, hn | `python3 /Users/reggin003/hyperinformed/hackernews-pipeline/catchmeup.py` |
-| kickstarter, ks | `python3 /Users/reggin003/hyperinformed/kickstarter-pipeline/catchmeup.py` |
+| youtube | `python3 youtube-pipeline/catchmeup.py` |
+| twitter, x | `python3 twitter-pipeline/catchmeup.py` |
+| github, gh | `python3 github-pipeline/catchmeup.py` |
+| producthunt, ph | `python3 producthunt-pipeline/catchmeup.py` |
+| every | `python3 every-pipeline/catchmeup.py` |
+| hackernews, hn | `python3 hackernews-pipeline/catchmeup.py` |
+| kickstarter, ks | `python3 kickstarter-pipeline/catchmeup.py` |
 
 Multiple platforms can be specified: `/catchmeup youtube twitter`
 
