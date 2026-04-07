@@ -28,8 +28,5 @@ __pycache__/
 # macOS
 **/.DS_Store
 
-# TTS models (large binary files)
-models/
-
 # Agent-Reach (large cloned repo, not our code)
 twitter-pipeline/Agent-Reach/

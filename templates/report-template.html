@@ -61,6 +61,14 @@
   }
   .audio-progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
   .audio-time { font-size: 11px; color: var(--dim); white-space: nowrap; }
+  .audio-skip {
+    font-family: -apple-system, system-ui, sans-serif;
+    font-size: 10px; color: var(--dim); background: transparent;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+    padding: 3px 7px; cursor: pointer; font-weight: 600;
+    flex-shrink: 0; -webkit-tap-highlight-color: transparent;
+  }
+  .audio-skip:active { background: rgba(255,255,255,0.05); }
   .audio-speed {
     font-family: -apple-system, system-ui, sans-serif;
     font-size: 10px; color: var(--dim); background: transparent;
@@ -196,9 +204,11 @@
 <!-- AUDIO PLAYER -->
 <div class="audio-player" id="audioPlayerUI" style="display:none">
   <button class="audio-btn" id="playPauseBtn" onclick="toggleAudio()">&#9654;</button>
+  <button class="audio-skip" onclick="skipAudio(-5)">-5s</button>
   <div class="audio-progress" onclick="seekAudio(event)">
     <div class="audio-progress-fill" id="progressFill"></div>
   </div>
+  <button class="audio-skip" onclick="skipAudio(5)">+5s</button>
   <span class="audio-time" id="audioTime">0:00 / 0:00</span>
   <button class="audio-speed" onclick="cycleSpeed()">1x</button>
 </div>
@@ -357,6 +367,9 @@ function toggleAudio() {
 function seekAudio(e) {
   const rect = e.currentTarget.getBoundingClientRect();
   audioEl.currentTime = (e.clientX - rect.left) / rect.width * audioEl.duration;
+}
+function skipAudio(seconds) {
+  audioEl.currentTime = Math.max(0, Math.min(audioEl.duration, audioEl.currentTime + seconds));
 }
 function cycleSpeed() {
   speedIdx = (speedIdx + 1) % speeds.length;
