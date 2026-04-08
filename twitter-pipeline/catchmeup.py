@@ -130,101 +130,118 @@ async def main():
     since = get_last_run()
     first_run = not LAST_RUN_FILE.exists()
 
-    client = Client(language="en-US")
+    try:
+        client = Client(language="en-US")
 
-    raw = json.loads(COOKIES_FILE.read_text())
-    if isinstance(raw, list):
-        cookie_dict = {c["name"]: c["value"] for c in raw if "name" in c and "value" in c}
-    else:
-        cookie_dict = raw
-    client.set_cookies(cookie_dict)
+        raw = json.loads(COOKIES_FILE.read_text())
+        if isinstance(raw, list):
+            cookie_dict = {c["name"]: c["value"] for c in raw if "name" in c and "value" in c}
+        else:
+            cookie_dict = raw
+        client.set_cookies(cookie_dict)
 
-    print(f"{'=' * 70}")
-    if first_run:
-        print(f"  FIRST RUN — showing tweets from the last 7 days")
-    else:
-        print(f"  Tweets since {since.strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"{'=' * 70}\n")
+        print(f"{'=' * 70}")
+        if first_run:
+            print(f"  FIRST RUN — showing tweets from the last 7 days")
+        else:
+            print(f"  Tweets since {since.strftime('%Y-%m-%d %H:%M UTC')}")
+        print(f"{'=' * 70}\n")
 
-    # Fetch all three channels
-    all_tweets = {}
+        # Fetch all three channels
+        all_tweets = {}
 
-    print("  [1/3] Fetching Following timeline...")
-    following = await fetch_timeline(
-        client, client.get_latest_timeline, "following", since
-    )
-    all_tweets.update(following)
-    print(f"         {len(following)} tweets")
+        print("  [1/3] Fetching Following timeline...")
+        following = await fetch_timeline(
+            client, client.get_latest_timeline, "following", since
+        )
+        all_tweets.update(following)
+        print(f"         {len(following)} tweets")
 
-    await asyncio.sleep(3)
+        await asyncio.sleep(3)
 
-    print("  [2/3] Fetching For You timeline...")
-    for_you = await fetch_timeline(
-        client, client.get_timeline, "for_you", since
-    )
-    # Only add tweets not already seen in Following
-    new_from_fy = {k: v for k, v in for_you.items() if k not in all_tweets}
-    all_tweets.update(new_from_fy)
-    print(f"         {len(for_you)} tweets ({len(new_from_fy)} unique)")
+        print("  [2/3] Fetching For You timeline...")
+        for_you = await fetch_timeline(
+            client, client.get_timeline, "for_you", since
+        )
+        # Only add tweets not already seen in Following
+        new_from_fy = {k: v for k, v in for_you.items() if k not in all_tweets}
+        all_tweets.update(new_from_fy)
+        print(f"         {len(for_you)} tweets ({len(new_from_fy)} unique)")
 
-    await asyncio.sleep(3)
+        await asyncio.sleep(3)
 
-    print("  [3/3] Fetching Notifications...")
-    notifs = await fetch_notifications(client, since)
-    new_from_notifs = {k: v for k, v in notifs.items() if k not in all_tweets}
-    all_tweets.update(new_from_notifs)
-    print(f"         {len(notifs)} tweets ({len(new_from_notifs)} unique)")
+        print("  [3/3] Fetching Notifications...")
+        notifs = await fetch_notifications(client, since)
+        new_from_notifs = {k: v for k, v in notifs.items() if k not in all_tweets}
+        all_tweets.update(new_from_notifs)
+        print(f"         {len(notifs)} tweets ({len(new_from_notifs)} unique)")
 
-    print()
+        print()
 
-    # Display sorted by date
-    sorted_tweets = sorted(all_tweets.values(), key=lambda x: x["date"], reverse=True)
+        # Display sorted by date
+        sorted_tweets = sorted(all_tweets.values(), key=lambda x: x["date"], reverse=True)
 
-    for t in sorted_tweets:
-        tag = ""
-        if t["type"] == "repost":
-            tag = " [repost]"
-        elif t["type"] == "quote":
-            tag = " [quote]"
-        source_tag = f"[{t['source']}]"
+        for t in sorted_tweets:
+            tag = ""
+            if t["type"] == "repost":
+                tag = " [repost]"
+            elif t["type"] == "quote":
+                tag = " [quote]"
+            source_tag = f"[{t['source']}]"
 
-        print(f"  {t['date']}  @{t['username']}{tag}  {source_tag}")
-        print(f"    {t['text']}")
-        print(f"    {t['url']}  [{t['likes']} likes]\n")
+            print(f"  {t['date']}  @{t['username']}{tag}  {source_tag}")
+            print(f"    {t['text']}")
+            print(f"    {t['url']}  [{t['likes']} likes]\n")
 
-    print(f"{'=' * 70}")
-    print(f"  {len(sorted_tweets)} unique tweets")
-    print(f"    Following: {len(following)} | For You: +{len(new_from_fy)} | Notifications: +{len(new_from_notifs)}")
-    print(f"{'=' * 70}")
+        print(f"{'=' * 70}")
+        print(f"  {len(sorted_tweets)} unique tweets")
+        print(f"    Following: {len(following)} | For You: +{len(new_from_fy)} | Notifications: +{len(new_from_notifs)}")
+        print(f"{'=' * 70}")
 
-    # Write JSON output
-    json_items = [
-        {
-            "title": t["text"][:280],
-            "url": t["url"],
-            "author": f"@{t['username']}",
-            "date": t["date"],
-            "description": "",
-            "meta": {
-                "source": t["source"],
-                "likes": t["likes"],
-                "is_retweet": t["type"] == "repost",
-                "is_quote": t["type"] == "quote",
-            },
+        # Write JSON output
+        json_items = [
+            {
+                "title": t["text"][:280],
+                "url": t["url"],
+                "author": f"@{t['username']}",
+                "date": t["date"],
+                "description": "",
+                "meta": {
+                    "source": t["source"],
+                    "likes": t["likes"],
+                    "is_retweet": t["type"] == "repost",
+                    "is_quote": t["type"] == "quote",
+                },
+            }
+            for t in sorted_tweets
+        ]
+        output = {
+            "pipeline": "twitter",
+            "status": "ok",
+            "count": len(json_items),
+            "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "items": json_items,
         }
-        for t in sorted_tweets
-    ]
-    output = {
-        "pipeline": "twitter",
-        "status": "ok",
-        "count": len(json_items),
-        "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "items": json_items,
-    }
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
-    save_last_run()
+        save_last_run()
+
+    except Exception as e:
+        print(f"\n  [!] Pipeline error: {e}\n")
+        print(f"{'=' * 70}")
+        print(f"  0 tweets (pipeline error)")
+        print(f"{'=' * 70}")
+        output = {
+            "pipeline": "twitter",
+            "status": "error",
+            "count": 0,
+            "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "error": str(e),
+            "items": [],
+        }
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":

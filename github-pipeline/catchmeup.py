@@ -113,96 +113,113 @@ def main():
     since = get_last_run()
     first_run = not LAST_RUN_FILE.exists()
 
-    # --- Trending ---
-    print(f"{'=' * 70}")
-    print(f"  GITHUB TRENDING TODAY")
-    print(f"{'=' * 70}\n")
+    try:
+        # --- Trending ---
+        print(f"{'=' * 70}")
+        print(f"  GITHUB TRENDING TODAY")
+        print(f"{'=' * 70}\n")
 
-    trending = fetch_trending()
-    if trending:
-        for i, r in enumerate(trending[:25], 1):
-            lang_str = f" [{r['lang']}]" if r['lang'] else ""
-            stars_str = f" ({r['stars']} stars)" if r['stars'] else ""
-            print(f"  {i:2}. {r['name']}{lang_str}{stars_str}")
-            if r['desc']:
-                print(f"      {r['desc'][:100]}")
-            print()
-    else:
-        print("  Could not fetch trending repos.\n")
+        trending = fetch_trending()
+        if trending:
+            for i, r in enumerate(trending[:25], 1):
+                lang_str = f" [{r['lang']}]" if r['lang'] else ""
+                stars_str = f" ({r['stars']} stars)" if r['stars'] else ""
+                print(f"  {i:2}. {r['name']}{lang_str}{stars_str}")
+                if r['desc']:
+                    print(f"      {r['desc'][:100]}")
+                print()
+        else:
+            print("  Could not fetch trending repos.\n")
 
-    # --- Starred Updates ---
-    print(f"{'=' * 70}")
-    if first_run:
-        print(f"  STARRED REPO UPDATES — last 7 days")
-    else:
-        print(f"  STARRED REPO UPDATES — since {since.strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"{'=' * 70}\n")
+        # --- Starred Updates ---
+        print(f"{'=' * 70}")
+        if first_run:
+            print(f"  STARRED REPO UPDATES — last 7 days")
+        else:
+            print(f"  STARRED REPO UPDATES — since {since.strftime('%Y-%m-%d %H:%M UTC')}")
+        print(f"{'=' * 70}\n")
 
-    updates = fetch_starred_updates(since)
-    if updates:
-        for u in sorted(updates, key=lambda x: x["pushed"], reverse=True):
-            print(f"  {u['name']}  ({u['stars']} stars)")
-            if u['desc']:
-                print(f"    {u['desc']}")
-            print(f"    Last push: {u['pushed']}")
-            for rel in u['releases']:
-                print(f"    NEW RELEASE: {rel['tag']} — {rel['name']} ({rel['date']})")
-            print()
-    else:
-        print("  No updates to starred repos.\n")
+        updates = fetch_starred_updates(since)
+        if updates:
+            for u in sorted(updates, key=lambda x: x["pushed"], reverse=True):
+                print(f"  {u['name']}  ({u['stars']} stars)")
+                if u['desc']:
+                    print(f"    {u['desc']}")
+                print(f"    Last push: {u['pushed']}")
+                for rel in u['releases']:
+                    print(f"    NEW RELEASE: {rel['tag']} — {rel['name']} ({rel['date']})")
+                print()
+        else:
+            print("  No updates to starred repos.\n")
 
-    print(f"{'=' * 70}")
-    print(f"  {len(trending)} trending | {len(updates)} starred with updates")
-    print(f"{'=' * 70}")
+        print(f"{'=' * 70}")
+        print(f"  {len(trending)} trending | {len(updates)} starred with updates")
+        print(f"{'=' * 70}")
 
-    # Write JSON output
-    def parse_stars(s):
-        s = str(s).replace(",", "").strip()
-        try:
-            return int(s)
-        except ValueError:
-            return 0
+        # Write JSON output
+        def parse_stars(s):
+            s = str(s).replace(",", "").strip()
+            try:
+                return int(s)
+            except ValueError:
+                return 0
 
-    json_items = []
-    for r in trending[:25]:
-        json_items.append({
-            "title": r["name"],
-            "url": f"https://github.com/{r['name']}",
-            "author": r["name"].split("/")[0] if "/" in r["name"] else r["name"],
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "description": r.get("desc", "")[:120],
-            "meta": {
-                "section": "trending",
-                "language": r.get("lang") or None,
-                "stars": parse_stars(r.get("stars", 0)),
-                "releases": [],
-            },
-        })
-    for u in updates:
-        json_items.append({
-            "title": u["name"],
-            "url": f"https://github.com/{u['name']}",
-            "author": u["name"].split("/")[0] if "/" in u["name"] else u["name"],
-            "date": u["pushed"],
-            "description": u.get("desc", "")[:120],
-            "meta": {
-                "section": "starred",
-                "language": None,
-                "stars": u.get("stars", 0),
-                "releases": u.get("releases", []),
-            },
-        })
-    output = {
-        "pipeline": "github",
-        "status": "ok",
-        "count": len(json_items),
-        "since": since.isoformat().replace("+00:00", "Z"),
-        "items": json_items,
-    }
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(output, f, indent=2)
+        json_items = []
+        for r in trending[:25]:
+            json_items.append({
+                "title": r["name"],
+                "url": f"https://github.com/{r['name']}",
+                "author": r["name"].split("/")[0] if "/" in r["name"] else r["name"],
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "description": r.get("desc", "")[:120],
+                "meta": {
+                    "section": "trending",
+                    "language": r.get("lang") or None,
+                    "stars": parse_stars(r.get("stars", 0)),
+                    "releases": [],
+                },
+            })
+        for u in updates:
+            json_items.append({
+                "title": u["name"],
+                "url": f"https://github.com/{u['name']}",
+                "author": u["name"].split("/")[0] if "/" in u["name"] else u["name"],
+                "date": u["pushed"],
+                "description": u.get("desc", "")[:120],
+                "meta": {
+                    "section": "starred",
+                    "language": None,
+                    "stars": u.get("stars", 0),
+                    "releases": u.get("releases", []),
+                },
+            })
+        output = {
+            "pipeline": "github",
+            "status": "ok",
+            "count": len(json_items),
+            "since": since.isoformat().replace("+00:00", "Z"),
+            "items": json_items,
+        }
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
-    save_last_run()
+        save_last_run()
+
+    except Exception as e:
+        print(f"\n  [!] Pipeline error: {e}\n")
+        print(f"{'=' * 70}")
+        print(f"  0 repos (pipeline error)")
+        print(f"{'=' * 70}")
+        output = {
+            "pipeline": "github",
+            "status": "error",
+            "count": 0,
+            "since": since.isoformat().replace("+00:00", "Z"),
+            "error": str(e),
+            "items": [],
+        }
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":

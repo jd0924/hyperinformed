@@ -93,7 +93,7 @@ def write_output_json(status, since, articles):
         "items": items,
     }
     with open(OUTPUT_FILE, "w") as f:
-        json.dump(output, f, indent=2)
+        json.dump(output, f, indent=2, ensure_ascii=False)
 
 
 def main():
@@ -131,8 +131,6 @@ def main():
         print(f"{'=' * 70}")
         print(f"  {len(articles)} articles")
         print(f"{'=' * 70}")
-
-        save_last_run()
     except Exception as e:
         status = "error"
         print(f"\n  [!] Error: {e}\n")
@@ -141,6 +139,8 @@ def main():
         print(f"{'=' * 70}")
     finally:
         write_output_json(status, since, articles)
+        if status == "ok":
+            save_last_run()
 
 
 if __name__ == "__main__":

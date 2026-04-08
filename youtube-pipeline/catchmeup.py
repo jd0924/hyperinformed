@@ -178,122 +178,141 @@ def main():
         print("   YOUTUBE_API_KEY=your_key_here")
         sys.exit(1)
 
-    channels = load_channels()
     since = get_last_run()
     first_run = not LAST_RUN_FILE.exists()
 
-    print(f"{'=' * 70}")
-    if first_run:
-        print(f"  FIRST RUN — showing videos from the last 7 days")
-    else:
-        print(f"  Videos since {since.strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"{'=' * 70}\n")
+    try:
+        channels = load_channels()
 
-    # Phase 1: Collect all videos from all channels
-    all_videos = []
-    errors = 0
-    for cid, name in channels:
-        try:
-            videos = fetch_videos(cid, name, since)
-            all_videos.extend(videos)
-        except Exception as e:
-            print(f"  [!] Error fetching {name}: {e}")
-            errors += 1
-
-    # Phase 2: Batch-fetch video details (duration, live status)
-    video_ids = [v["video_id"] for v in all_videos if v.get("video_id")]
-    details = {}
-    if video_ids:
-        try:
-            details = fetch_video_details(video_ids)
-        except Exception as e:
-            print(f"  [!] Error fetching video details: {e}")
-
-    # Phase 3: Classify each video and check shorts
-    shorts_to_check = []
-    for v in all_videos:
-        vid = v["video_id"]
-        info = details.get(vid, {})
-        v["duration_seconds"] = info.get("duration_seconds", 0)
-        v["duration"] = format_duration(v["duration_seconds"])
-        v["live_broadcast"] = info.get("live_broadcast", "none")
-        v["is_livestream"] = info.get("is_livestream", False)
-
-        if v["duration_seconds"] <= 60 and v["live_broadcast"] == "none" and not v["is_livestream"]:
-            shorts_to_check.append(v)
-        elif v["live_broadcast"] == "live":
-            v["type"] = "LIVE"
-        elif v["live_broadcast"] == "upcoming":
-            v["type"] = "UPCOMING"
-        elif v["is_livestream"]:
-            v["type"] = "STREAM"
+        print(f"{'=' * 70}")
+        if first_run:
+            print(f"  FIRST RUN — showing videos from the last 7 days")
         else:
-            v["type"] = "VIDEO"
+            print(f"  Videos since {since.strftime('%Y-%m-%d %H:%M UTC')}")
+        print(f"{'=' * 70}\n")
 
-    # Check short candidates via URL probe
-    for v in shorts_to_check:
-        if is_short_url(v["video_id"]):
-            v["type"] = "SHORT"
-            v["url"] = f"https://www.youtube.com/shorts/{v['video_id']}"
-        else:
-            v["type"] = "VIDEO"
+        # Phase 1: Collect all videos from all channels
+        all_videos = []
+        errors = 0
+        for cid, name in channels:
+            try:
+                videos = fetch_videos(cid, name, since)
+                all_videos.extend(videos)
+            except Exception as e:
+                print(f"  [!] Error fetching {name}: {e}")
+                errors += 1
 
-    # Phase 4: Print grouped by channel
-    by_channel = {}
-    for v in all_videos:
-        by_channel.setdefault(v["channel"], []).append(v)
+        # Phase 2: Batch-fetch video details (duration, live status)
+        video_ids = [v["video_id"] for v in all_videos if v.get("video_id")]
+        details = {}
+        if video_ids:
+            try:
+                details = fetch_video_details(video_ids)
+            except Exception as e:
+                print(f"  [!] Error fetching video details: {e}")
 
-    total = len(all_videos)
-    shorts_count = sum(1 for v in all_videos if v.get("type") == "SHORT")
-    streams_count = sum(1 for v in all_videos if v.get("type") in ("LIVE", "STREAM"))
-    videos_count = total - shorts_count - streams_count
+        # Phase 3: Classify each video and check shorts
+        shorts_to_check = []
+        for v in all_videos:
+            vid = v["video_id"]
+            info = details.get(vid, {})
+            v["duration_seconds"] = info.get("duration_seconds", 0)
+            v["duration"] = format_duration(v["duration_seconds"])
+            v["live_broadcast"] = info.get("live_broadcast", "none")
+            v["is_livestream"] = info.get("is_livestream", False)
 
-    for name in dict.fromkeys(v["channel"] for v in all_videos):
-        channel_videos = by_channel.get(name, [])
-        if not channel_videos:
-            continue
-        print(f"  {name}")
-        print(f"  {'-' * len(name)}")
-        for v in sorted(channel_videos, key=lambda x: x["date"], reverse=True):
-            tag = v.get("type", "VIDEO")
-            duration = v.get("duration", "")
-            print(f"    {v['date']}  [{tag}] ({duration})  {v['title']}")
-            print(f"    {v['url']}")
-            if v.get("description"):
-                print(f"    {v['description']}")
-            print()
+            if v["duration_seconds"] <= 60 and v["live_broadcast"] == "none" and not v["is_livestream"]:
+                shorts_to_check.append(v)
+            elif v["live_broadcast"] == "live":
+                v["type"] = "LIVE"
+            elif v["live_broadcast"] == "upcoming":
+                v["type"] = "UPCOMING"
+            elif v["is_livestream"]:
+                v["type"] = "STREAM"
+            else:
+                v["type"] = "VIDEO"
 
-    print(f"{'=' * 70}")
-    print(f"  {total} new video(s) across {len(channels)} channels ({errors} errors)")
-    print(f"  {videos_count} videos, {shorts_count} shorts, {streams_count} streams")
-    print(f"{'=' * 70}")
+        # Check short candidates via URL probe
+        for v in shorts_to_check:
+            if is_short_url(v["video_id"]):
+                v["type"] = "SHORT"
+                v["url"] = f"https://www.youtube.com/shorts/{v['video_id']}"
+            else:
+                v["type"] = "VIDEO"
 
-    # Write JSON output
-    json_items = [
-        {
-            "title": v["title"],
-            "url": v["url"],
-            "author": v["channel"],
-            "date": v["date"],
-            "description": v.get("description", "")[:200],
-            "meta": {
-                "type": v.get("type", "VIDEO"),
-                "duration": v.get("duration", "0:00"),
-            },
+        # Phase 4: Print grouped by channel
+        by_channel = {}
+        for v in all_videos:
+            by_channel.setdefault(v["channel"], []).append(v)
+
+        total = len(all_videos)
+        shorts_count = sum(1 for v in all_videos if v.get("type") == "SHORT")
+        streams_count = sum(1 for v in all_videos if v.get("type") in ("LIVE", "STREAM"))
+        videos_count = total - shorts_count - streams_count
+
+        if all_videos:
+            for name in dict.fromkeys(v["channel"] for v in all_videos):
+                channel_videos = by_channel.get(name, [])
+                if not channel_videos:
+                    continue
+                print(f"  {name}")
+                print(f"  {'-' * len(name)}")
+                for v in sorted(channel_videos, key=lambda x: x["date"], reverse=True):
+                    tag = v.get("type", "VIDEO")
+                    duration = v.get("duration", "")
+                    print(f"    {v['date']}  [{tag}] ({duration})  {v['title']}")
+                    print(f"    {v['url']}")
+                    if v.get("description"):
+                        print(f"    {v['description']}")
+                    print()
+
+        print(f"{'=' * 70}")
+        print(f"  {total} new video(s) across {len(channels)} channels ({errors} errors)")
+        print(f"  {videos_count} videos, {shorts_count} shorts, {streams_count} streams")
+        print(f"{'=' * 70}")
+
+        # Write JSON output
+        json_items = [
+            {
+                "title": v["title"],
+                "url": v["url"],
+                "author": v["channel"],
+                "date": v["date"],
+                "description": v.get("description", "")[:200],
+                "meta": {
+                    "type": v.get("type", "VIDEO"),
+                    "duration": v.get("duration", "0:00"),
+                },
+            }
+            for v in all_videos
+        ]
+        output = {
+            "pipeline": "youtube",
+            "status": "ok",
+            "count": len(json_items),
+            "since": since.isoformat().replace("+00:00", "Z"),
+            "items": json_items,
         }
-        for v in all_videos
-    ]
-    output = {
-        "pipeline": "youtube",
-        "status": "ok",
-        "count": len(json_items),
-        "since": since.isoformat().replace("+00:00", "Z"),
-        "items": json_items,
-    }
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(output, f, indent=2)
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
-    save_last_run()
+        save_last_run()
+
+    except Exception as e:
+        print(f"\n  [!] Pipeline error: {e}\n")
+        print(f"{'=' * 70}")
+        print(f"  0 videos (pipeline error)")
+        print(f"{'=' * 70}")
+        output = {
+            "pipeline": "youtube",
+            "status": "error",
+            "count": 0,
+            "since": since.isoformat().replace("+00:00", "Z"),
+            "error": str(e),
+            "items": [],
+        }
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":

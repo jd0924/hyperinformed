@@ -103,94 +103,111 @@ def fetch_hn_front_page():
 
 
 def main():
-    feeds = load_feeds()
     since = get_last_run()
     first_run = not LAST_RUN_FILE.exists()
 
-    print(f"{'=' * 70}")
-    if first_run:
-        print(f"  FIRST RUN — showing posts from the last 7 days")
-    else:
-        print(f"  Posts since {since.strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"  Checking {len(feeds)} blogs...")
-    print(f"{'=' * 70}\n")
-
-    total = 0
-    errors = 0
-    all_items = []
-    for feed_info in feeds:
-        try:
-            posts = fetch_posts(feed_info, since)
-        except Exception as e:
-            print(f"  [!] Error fetching {feed_info['name']}: {e}")
-            errors += 1
-            continue
-        if not posts:
-            continue
-        print(f"  {feed_info['name']}")
-        print(f"  {'-' * len(feed_info['name'])}")
-        for p in sorted(posts, key=lambda x: x["date"], reverse=True):
-            print(f"    {p['date']}  {p['title']}")
-            print(f"    {p['url']}\n")
-            all_items.append({
-                "title": p["title"],
-                "url": p["url"],
-                "author": p["blog"],
-                "date": p["date"],
-                "description": "",
-                "meta": {"blog": p["blog"]},
-            })
-        total += len(posts)
-
-    # Fetch HN front page top stories
-    print(f"\n  Fetching HN front page top {HN_TOP_LIMIT} stories...")
-    hn_stories = []
     try:
-        hn_stories = fetch_hn_front_page()
+        feeds = load_feeds()
+        print(f"{'=' * 70}")
+        if first_run:
+            print(f"  FIRST RUN — showing posts from the last 7 days")
+        else:
+            print(f"  Posts since {since.strftime('%Y-%m-%d %H:%M UTC')}")
+        print(f"  Checking {len(feeds)} blogs...")
+        print(f"{'=' * 70}\n")
+
+        total = 0
+        errors = 0
+        all_items = []
+        for feed_info in feeds:
+            try:
+                posts = fetch_posts(feed_info, since)
+            except Exception as e:
+                print(f"  [!] Error fetching {feed_info['name']}: {e}")
+                errors += 1
+                continue
+            if not posts:
+                continue
+            print(f"  {feed_info['name']}")
+            print(f"  {'-' * len(feed_info['name'])}")
+            for p in sorted(posts, key=lambda x: x["date"], reverse=True):
+                print(f"    {p['date']}  {p['title']}")
+                print(f"    {p['url']}\n")
+                all_items.append({
+                    "title": p["title"],
+                    "url": p["url"],
+                    "author": p["blog"],
+                    "date": p["date"],
+                    "description": "",
+                    "meta": {"blog": p["blog"]},
+                })
+            total += len(posts)
+
+        # Fetch HN front page top stories
+        print(f"\n  Fetching HN front page top {HN_TOP_LIMIT} stories...")
+        hn_stories = []
+        try:
+            hn_stories = fetch_hn_front_page()
+        except Exception as e:
+            print(f"  [!] Error fetching HN front page: {e}")
+
+        if hn_stories:
+            print(f"\n  HN Front Page")
+            print(f"  {'-' * 13}")
+            for s in hn_stories:
+                score = s["score"]
+                comments = s["comments"]
+                print(f"    {s['title']}")
+                print(f"    {score} points | {comments} comments | by {s['by']}")
+                print(f"    {s['url']}\n")
+                all_items.append({
+                    "title": s["title"],
+                    "url": s["url"],
+                    "author": f"HN ({s['by']})",
+                    "date": datetime.fromtimestamp(s["time"], tz=timezone.utc).strftime("%Y-%m-%d %H:%M"),
+                    "description": f"{score} points, {comments} comments",
+                    "meta": {
+                        "blog": "news.ycombinator.com",
+                        "hn_url": s["hn_url"],
+                        "score": score,
+                        "comments": comments,
+                    },
+                })
+            total += len(hn_stories)
+
+        print(f"{'=' * 70}")
+        print(f"  {total} items ({total - len(hn_stories)} blog posts + {len(hn_stories)} HN front page)")
+        print(f"  ({errors} errors)")
+        print(f"{'=' * 70}")
+
+        # Write JSON output
+        output = {
+            "pipeline": "hackernews",
+            "status": "ok",
+            "count": len(all_items),
+            "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "items": all_items,
+        }
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+
+        save_last_run()
+
     except Exception as e:
-        print(f"  [!] Error fetching HN front page: {e}")
-
-    if hn_stories:
-        print(f"\n  HN Front Page")
-        print(f"  {'-' * 13}")
-        for s in hn_stories:
-            score = s["score"]
-            comments = s["comments"]
-            print(f"    {s['title']}")
-            print(f"    {score} points | {comments} comments | by {s['by']}")
-            print(f"    {s['url']}\n")
-            all_items.append({
-                "title": s["title"],
-                "url": s["url"],
-                "author": f"HN ({s['by']})",
-                "date": datetime.fromtimestamp(s["time"], tz=timezone.utc).strftime("%Y-%m-%d %H:%M"),
-                "description": f"{score} points, {comments} comments",
-                "meta": {
-                    "blog": "news.ycombinator.com",
-                    "hn_url": s["hn_url"],
-                    "score": score,
-                    "comments": comments,
-                },
-            })
-        total += len(hn_stories)
-
-    print(f"{'=' * 70}")
-    print(f"  {total} items ({total - len(hn_stories)} blog posts + {len(hn_stories)} HN front page)")
-    print(f"  ({errors} errors)")
-    print(f"{'=' * 70}")
-
-    # Write JSON output
-    output = {
-        "pipeline": "hackernews",
-        "status": "ok",
-        "count": len(all_items),
-        "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "items": all_items,
-    }
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(output, f, indent=2)
-
-    save_last_run()
+        print(f"\n  [!] Pipeline error: {e}\n")
+        print(f"{'=' * 70}")
+        print(f"  0 items (pipeline error)")
+        print(f"{'=' * 70}")
+        output = {
+            "pipeline": "hackernews",
+            "status": "error",
+            "count": 0,
+            "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "error": str(e),
+            "items": [],
+        }
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Fetch trending Kickstarter projects since last run."""
+"""Fetch trending Technology projects on Kickstarter.
+
+Runs at most once every 7 days. Filters to Technology category (id=16),
+sorted by popularity, with >100% funded threshold.
+"""
 
 import json
 import urllib.request
@@ -20,14 +24,16 @@ HEADERS = {
     "X-Requested-With": "XMLHttpRequest",
 }
 
+RUN_INTERVAL_DAYS = 7
+CATEGORY_ID = 16  # Technology
+
 
 def get_last_run():
     if LAST_RUN_FILE.exists():
         text = LAST_RUN_FILE.read_text().strip()
         if text:
             return datetime.fromisoformat(text)
-    # First run: default to 7 days ago
-    return datetime.now(timezone.utc) - timedelta(days=7)
+    return None
 
 
 def save_last_run():
@@ -43,16 +49,21 @@ def format_currency(amount, symbol="$"):
 
 
 def fetch_projects():
-    """Fetch top live projects by popularity. No date filter — repetition is a signal.
+    """Fetch top live Technology projects sorted by popularity, >100% funded.
 
-    Projects that appear repeatedly across runs are gaining real traction.
-    Sorted by popularity (most backers + funding velocity).
-    Limited to top 20 to keep the report focused.
+    Uses category_id=16 (Technology) and raised=2 (>100% funded).
+    Takes top 20 results.
     """
     all_projects = []
 
-    for page in range(1, 3):  # 2 pages, take top 20
-        params = f"?sort=popularity&state=live&page={page}"
+    for page in range(1, 4):  # up to 3 pages to get enough results
+        params = (
+            f"?category_id={CATEGORY_ID}"
+            f"&sort=popularity"
+            f"&state=live"
+            f"&raised=2"
+            f"&page={page}"
+        )
         req = urllib.request.Request(DISCOVER_URL + params, headers=HEADERS)
         try:
             resp = urllib.request.urlopen(req, timeout=15)
@@ -110,65 +121,109 @@ def fetch_projects():
 
 
 def main():
-    print(f"{'=' * 70}")
-    print(f"  KICKSTARTER — TOP LIVE PROJECTS BY POPULARITY")
-    print(f"{'=' * 70}\n")
+    # Check if we should skip (ran within the last 7 days)
+    last_run = get_last_run()
+    if last_run:
+        days_since = (datetime.now(timezone.utc) - last_run).total_seconds() / 86400
+        if days_since < RUN_INTERVAL_DAYS:
+            next_run = last_run + timedelta(days=RUN_INTERVAL_DAYS)
+            print(f"{'=' * 70}")
+            print(f"  KICKSTARTER — TECHNOLOGY, WEEKLY (runs every {RUN_INTERVAL_DAYS} days)")
+            print(f"{'=' * 70}\n")
+            print(f"  Last run: {last_run.strftime('%Y-%m-%d %H:%M UTC')}")
+            print(f"  Next run: {next_run.strftime('%Y-%m-%d %H:%M UTC')}")
+            print(f"  ({RUN_INTERVAL_DAYS - days_since:.1f} days remaining)\n")
+            print(f"{'=' * 70}")
+            print(f"  0 projects (skipped — too soon)")
+            print(f"{'=' * 70}")
 
-    projects = fetch_projects()
+            output = {
+                "pipeline": "kickstarter",
+                "status": "ok",
+                "count": 0,
+                "since": last_run.isoformat(),
+                "items": [],
+            }
+            with open(OUTPUT_FILE, "w") as f:
+                json.dump(output, f, indent=2)
+            return
 
-    if not projects:
-        print("  No projects found.\n")
-    else:
-        for i, p in enumerate(projects, 1):
-            cat = f"  [{p['category']}]" if p["category"] else ""
-            days = f"  {p['days_left']}d left" if p["days_left"] else ""
-            pick = " *Staff Pick*" if p["staff_pick"] else ""
+    try:
+        print(f"{'=' * 70}")
+        print(f"  KICKSTARTER — TOP TECHNOLOGY PROJECTS (>100% FUNDED)")
+        print(f"{'=' * 70}\n")
 
-            print(f"  {i:2}. {p['name']}  ({p['pct_funded']}% funded{pick})")
-            print(f"      {p['blurb'][:120]}")
-            print(
-                f"      {format_currency(p['pledged'], p['symbol'])} / "
-                f"{format_currency(p['goal'], p['symbol'])}  |  "
-                f"{p['backers']:,} backers{days}{cat}"
-            )
-            print(f"      {p['url']}")
-            print()
+        projects = fetch_projects()
 
-    print(f"{'=' * 70}")
-    print(f"  {len(projects)} project(s)")
-    print(f"{'=' * 70}")
+        if not projects:
+            print("  No overfunded technology projects found.\n")
+        else:
+            for i, p in enumerate(projects, 1):
+                cat = f"  [{p['category']}]" if p["category"] else ""
+                days = f"  {p['days_left']}d left" if p["days_left"] else ""
+                pick = " *Staff Pick*" if p["staff_pick"] else ""
 
-    # Write JSON output
-    json_items = [
-        {
-            "title": p["name"],
-            "url": p["url"],
-            "author": "",
-            "date": p["launched"],
-            "description": p["blurb"],
-            "meta": {
-                "pct_funded": p["pct_funded"],
-                "pledged": format_currency(p["pledged"], p["symbol"]),
-                "goal": format_currency(p["goal"], p["symbol"]),
-                "backers": p["backers"],
-                "days_left": p["days_left"],
-                "category": p["category"],
-                "staff_pick": p["staff_pick"],
-            },
+                print(f"  {i:2}. {p['name']}  ({p['pct_funded']}% funded{pick})")
+                print(f"      {p['blurb'][:120]}")
+                print(
+                    f"      {format_currency(p['pledged'], p['symbol'])} / "
+                    f"{format_currency(p['goal'], p['symbol'])}  |  "
+                    f"{p['backers']:,} backers{days}{cat}"
+                )
+                print(f"      {p['url']}")
+                print()
+
+        print(f"{'=' * 70}")
+        print(f"  {len(projects)} project(s)")
+        print(f"{'=' * 70}")
+
+        # Write JSON output
+        json_items = [
+            {
+                "title": p["name"],
+                "url": p["url"],
+                "author": "",
+                "date": p["launched"],
+                "description": p["blurb"],
+                "meta": {
+                    "pct_funded": p["pct_funded"],
+                    "pledged": format_currency(p["pledged"], p["symbol"]),
+                    "goal": format_currency(p["goal"], p["symbol"]),
+                    "backers": p["backers"],
+                    "days_left": p["days_left"],
+                    "category": p["category"],
+                    "staff_pick": p["staff_pick"],
+                },
+            }
+            for p in projects
+        ]
+        output = {
+            "pipeline": "kickstarter",
+            "status": "ok",
+            "count": len(json_items),
+            "since": datetime.now(timezone.utc).isoformat(),
+            "items": json_items,
         }
-        for p in projects
-    ]
-    output = {
-        "pipeline": "kickstarter",
-        "status": "ok",
-        "count": len(json_items),
-        "since": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "items": json_items,
-    }
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(output, f, indent=2)
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
-    save_last_run()
+        save_last_run()
+
+    except Exception as e:
+        print(f"\n  [!] Pipeline error: {e}\n")
+        print(f"{'=' * 70}")
+        print(f"  0 projects (pipeline error)")
+        print(f"{'=' * 70}")
+        output = {
+            "pipeline": "kickstarter",
+            "status": "error",
+            "count": 0,
+            "since": datetime.now(timezone.utc).isoformat(),
+            "error": str(e),
+            "items": [],
+        }
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":
