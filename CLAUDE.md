@@ -16,15 +16,16 @@ Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt +
 When the user says "catch me up", run `/catchmeup`. Follow these steps exactly:
 
 1. **Fetch** — Run all 7 pipeline scripts in parallel. Each writes `output.json` with structured data. If one fails, it exits cleanly with `status: "error"` in its JSON. No pipeline can crash another.
-2. **Group & Write** — Read the 7 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. This is an intellectual step — do NOT use an automated script. Produce **two files in the same pass** (guarantees identical content/ordering):
-   - `catchmeup-<start>-to-<end>.html` — fill in `templates/report-template.html` content blocks directly. Set the `<!-- AUDIO_FILE -->` placeholder to the MP3 filename. Do NOT rewrite the CSS or JavaScript.
-   - `catchmeup-<start>-to-<end>.narration.txt` — spoken narration script (see Narration Format below).
+2. **Generate report & narration** — Read the 7 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. This is an intellectual step — do NOT use an automated script. Produce **two files in the same pass** (guarantees identical content/ordering):
+   - `catchmeup-<start>-to-<end>.html` — the written report. Fill in `templates/report-template.html` content blocks directly. Set the `<!-- AUDIO_FILE -->` placeholder to the MP3 filename. Do NOT rewrite the CSS or JavaScript.
+   - `catchmeup-<start>-to-<end>.narration.txt` — spoken narration script (see Narration Format below). Same content, same order as the HTML.
 3. **Cross-check** — Run `python3 crosscheck.py <report.html>`. It verifies per-platform item counts, URLs, and authors between JSON and HTML. If ANY check fails, fix the HTML before showing the report.
-4. **Generate audio** — Run `python3 tts-generate-say.py <narration.txt>`. Produces `catchmeup-<start>-to-<end>.mp3` using macOS Ava (Premium) voice (~8-10 min).
+4. **Generate audio** — Run `python3 tts-generate-say.py <narration.txt>`. Produces `catchmeup-<start>-to-<end>.mp3` using macOS Ava (Premium) voice.
 5. **Open** — Open the HTML in the browser. The embedded audio player loads the MP3 automatically.
-6. If 0 new items from a source, note they're caught up and when last run was.
-7. **Report pipeline failures** at the top of the status table: which pipeline failed, the error, and the likely reason.
-8. **Include everything except ads** — RTs, reposts, quotes, low-engagement posts all stay in. Only filter out pure advertisements with zero informational value.
+6. **Deploy** — Run `python3 deploy.py <report.html>`. Embeds the MP3 into the HTML and deploys to Netlify. Prints the live URL (https://majestic-genie-c59c74.netlify.app). Accessible from any device with a browser.
+7. If 0 new items from a source, note they're caught up and when last run was.
+8. **Report pipeline failures** at the top of the status table: which pipeline failed, the error, and the likely reason.
+9. **Include everything except ads** — RTs, reposts, quotes, low-engagement posts all stay in. Only filter out pure advertisements with zero informational value.
 
 ## Report Format Rules
 

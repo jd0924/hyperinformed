@@ -16,6 +16,10 @@ catchmeup-*.html
 catchmeup-*.mp3
 catchmeup-*.narration.txt
 
+# Deploy
+deploy/
+.netlify/
+
 # Runtime state
 */last_run.txt
 */output.json
