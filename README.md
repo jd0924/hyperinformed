@@ -1,22 +1,40 @@
 # Hyperinformed
 
-A multi-source intelligence feed that aggregates content from YouTube, X/Twitter, GitHub, Product Hunt, Every.to, Hacker News top blogs, and Kickstarter into a single catch-me-up digest. Built to work with [Claude Code](https://claude.ai/claude-code) as a `/catchmeup` slash command.
+A multi-source intelligence feed that aggregates content from YouTube, X/Twitter, GitHub, Product Hunt, Every.to, Hacker News blogs, Kickstarter, and Indie Hackers into a single catch-me-up report with audio narration. Built to work with [Claude Code](https://claude.ai/claude-code) as a `/catchmeup` slash command.
 
 ## What it does
 
-You say `/catchmeup` and get a topic-grouped summary of everything that happened since you last checked — across all your feeds. New YouTube videos, tweets from people you follow, trending GitHub repos, top Product Hunt launches, Every.to articles, posts from 92 top Hacker News blogs, and trending Kickstarter projects. All summarized and connected by theme, not listed by source.
+Say `/catchmeup` and get a comprehensive HTML report of everything that happened since you last checked — across all your feeds. Each report includes:
+
+- **Written report** — topic-grouped HTML with tap-to-highlight items, clickable links, and a pipeline status dashboard
+- **Audio narration** — TTS-generated MP3 using macOS Ava (Premium) voice, embedded in the HTML
+- **Mobile access** — deployed to Netlify so you can read and listen from your phone
 
 ```
-/catchmeup            # all 7 sources
-/catchmeup youtube    # just YouTube
-/catchmeup x          # just Twitter
-/catchmeup gh         # just GitHub
-/catchmeup ph         # just Product Hunt
-/catchmeup every      # just Every.to
-/catchmeup hn         # just Hacker News blogs
-/catchmeup ks         # just Kickstarter
-/catchmeup youtube x  # mix and match
+/catchmeup              # all 8 sources
+/catchmeup youtube      # just YouTube
+/catchmeup x            # just Twitter
+/catchmeup gh           # just GitHub
+/catchmeup ph           # just Product Hunt
+/catchmeup every        # just Every.to
+/catchmeup hn           # just Hacker News blogs
+/catchmeup ks           # just Kickstarter
+/catchmeup ih           # just Indie Hackers
+/catchmeup youtube x    # mix and match
 ```
+
+## Pipelines
+
+| Pipeline | Source | Auth | Frequency | What it fetches |
+|---|---|---|---|---|
+| YouTube | YouTube Data API v3 | API key | Daily | Videos from subscribed channels |
+| Twitter/X | X timeline via twikit | Cookies | Daily | Following + For You + Notifications |
+| GitHub | Trending + starred repos | `gh` CLI | Daily | Trending repos + updates to starred repos with new releases |
+| Product Hunt | GraphQL API | API key | Weekly | Top products by votes with weekly leaderboard rank |
+| Every.to | Private RSS feed | Feed URL | Daily | New articles |
+| Hacker News | 92 blog RSS feeds + HN API | None | Daily | Blog posts + HN front page top 30 stories |
+| Kickstarter | Discover API | None | Weekly | Technology projects, >100% funded, sorted by popularity |
+| Indie Hackers | Firebase API | None | Daily | High-signal forum posts (50+ views AND 2+ replies) |
 
 ## Setup
 
@@ -25,6 +43,8 @@ You say `/catchmeup` and get a topic-grouped summary of everything that happened
 - Python 3.10+
 - [Claude Code](https://claude.ai/claude-code)
 - [GitHub CLI](https://cli.github.com/) (`brew install gh`)
+- [Netlify CLI](https://docs.netlify.com/cli/get-started/) (`npm install -g netlify-cli`)
+- macOS with Ava (Premium) voice installed (System Settings > Accessibility > Spoken Content > Manage Voices)
 
 ### Install dependencies
 
@@ -33,17 +53,6 @@ git clone https://github.com/jd0924/hyperinformed.git
 cd hyperinformed
 pip install -r requirements.txt
 ```
-
-### Install the slash command
-
-Copy the slash command into your Claude Code commands:
-
-```bash
-mkdir -p ~/.claude/commands
-cp catchmeup.md ~/.claude/commands/catchmeup.md
-```
-
-Then edit `~/.claude/commands/catchmeup.md` and replace `HYPERINFORMED_PATH` with the absolute path to your cloned repo (e.g. `/Users/you/hyperinformed`).
 
 ### Configure each pipeline
 
@@ -61,31 +70,20 @@ Requires a YouTube Data API v3 key (free, 10,000 units/day):
 YOUTUBE_API_KEY=your_key_here
 ```
 
-Then add your subscriptions:
+Then add your subscriptions via [Google Takeout](https://takeout.google.com/) — export YouTube data and copy the `subscriptions.csv`:
 
 ```bash
-cp youtube-pipeline/subscriptions.csv.example youtube-pipeline/subscriptions.csv
-# Edit subscriptions.csv — format: Channel Id,Channel Url,Channel Title
+cp /path/to/Takeout/YouTube/subscriptions/subscriptions.csv youtube-pipeline/subscriptions.csv
 ```
-
-Each channel costs 1 API unit per fetch — 50 channels = 50 units out of 10,000/day.
 
 #### Twitter / X
 
 1. Install the [Cookie-Editor](https://cookie-editor.com/) browser extension
 2. Go to x.com and log in
-3. Click Cookie-Editor → Export (JSON)
+3. Click Cookie-Editor > Export (JSON)
 4. Save as `twitter-pipeline/cookies.json`
-5. Add accounts to follow:
 
-```bash
-cp twitter-pipeline/accounts.txt.example twitter-pipeline/accounts.txt
-# Edit accounts.txt — one @handle per line, # for comments
-```
-
-User IDs are cached automatically after the first run (`user_cache.json`) to halve API calls and stay under Twitter's rate limits (50 requests per 15-minute window).
-
-Cookies expire periodically — re-export when the script stops working.
+Fetches your Following timeline, For You timeline, and Notifications. Cookies expire periodically — re-export when the script stops working.
 
 #### GitHub
 
@@ -93,7 +91,7 @@ Cookies expire periodically — re-export when the script stops working.
 gh auth login
 ```
 
-That's it. The script fetches trending repos and tracks updates to your starred repos automatically.
+Fetches trending repos and tracks updates to your starred repos automatically.
 
 #### Product Hunt
 
@@ -102,9 +100,11 @@ That's it. The script fetches trending repos and tracks updates to your starred 
 3. Save it:
 
 ```bash
-cp producthunt-pipeline/.env.example producthunt-pipeline/.env
-# Edit .env and paste your token
+# Create producthunt-pipeline/.env with:
+PRODUCTHUNT_API_KEY=your_token_here
 ```
+
+Runs weekly — fetches the top products from the past 7 days sorted by votes.
 
 #### Every.to
 
@@ -118,51 +118,70 @@ EVERY_FEED_URL=https://every.to/feeds/YOUR_TOKEN.xml
 
 #### Hacker News Blogs
 
-No configuration needed — the pipeline ships with an OPML file of 92 top Hacker News blogs and fetches them via RSS.
+No configuration needed — ships with 92 curated blog RSS feeds plus the HN front page top 30.
 
 #### Kickstarter
 
-No configuration needed — the pipeline scrapes trending live projects from Kickstarter.
+No configuration needed — fetches Technology category projects that are >100% funded. Runs weekly.
+
+#### Indie Hackers
+
+No configuration needed — fetches high-signal forum posts (50+ views AND 2+ replies) from the Indie Hackers Firebase API.
+
+### Netlify deploy
+
+```bash
+netlify login
+```
+
+Reports are deployed to Netlify with audio embedded. The deploy script prints a URL you can open on any device.
 
 ## How it works
 
-Each pipeline has its own `catchmeup.py` that:
-- Fetches content from its source
-- Filters for new items since `last_run.txt` (except Product Hunt which shows today's top ranked products)
-- Prints a clean terminal digest
+1. **Fetch** — All 8 pipelines run in parallel, each writing structured `output.json`
+2. **Generate** — LLM decides topic groupings and highlights, writes a `plan.json`, then `generate-report.py` renders the HTML from the plan
+3. **Cross-check** — `crosscheck.py` verifies every item from JSON appears in the HTML
+4. **Audio** — `tts-generate-say.py` generates narration using macOS Ava voice
+5. **Open** — Report opens in the browser with an embedded audio player
+6. **Deploy** — `deploy.py` embeds the MP3 into the HTML and pushes to Netlify
 
-Claude Code reads the output and summarizes everything grouped by topic — connecting voices across sources. For example, if @sama tweets about GPT-5, a YouTube channel reviews it, and it's trending on GitHub, they all appear under one topic heading.
+Each pipeline writes `output.json` with a standard schema and tracks its last run in `last_run.txt`. If a pipeline fails, it writes `status: "error"` to its JSON so other pipelines aren't affected.
 
 ## Project structure
 
 ```
 hyperinformed/
-├── CLAUDE.md                           # Claude Code context
-├── catchmeup.md                        # Slash command template
+├── CLAUDE.md                           # Claude Code project context
+├── README.md
 ├── requirements.txt
+├── generate-report.py                  # Renders HTML from plan.json + output.json
+├── crosscheck.py                       # Verifies HTML matches JSON data
+├── deploy.py                           # Embeds audio + deploys to Netlify
+├── tts-generate-say.py                 # Generates audio narration
+├── templates/
+│   └── report-template.html            # HTML template (dark theme, audio player)
 ├── youtube-pipeline/
-│   ├── catchmeup.py                    # YouTube Data API v3
-│   └── subscriptions.csv.example
+│   └── catchmeup.py                    # YouTube Data API v3
 ├── twitter-pipeline/
-│   ├── catchmeup.py                    # X/Twitter via twikit + user ID cache
-│   └── accounts.txt.example
+│   └── catchmeup.py                    # X/Twitter via twikit
 ├── github-pipeline/
 │   └── catchmeup.py                    # Trending + starred repos
 ├── producthunt-pipeline/
-│   ├── catchmeup.py                    # Product Hunt GraphQL API
-│   └── .env.example
+│   └── catchmeup.py                    # Product Hunt GraphQL API (weekly)
 ├── every-pipeline/
 │   └── catchmeup.py                    # Every.to private RSS feed
 ├── hackernews-pipeline/
-│   ├── catchmeup.py                    # Top HN blogs via RSS/Atom
+│   ├── catchmeup.py                    # HN blogs + front page
 │   └── feeds.opml                      # 92 curated blog feeds
-└── kickstarter-pipeline/
-    └── catchmeup.py                    # Kickstarter trending projects
+├── kickstarter-pipeline/
+│   └── catchmeup.py                    # Kickstarter Technology (weekly)
+└── indiehackers-pipeline/
+    └── catchmeup.py                    # Indie Hackers Firebase API
 ```
 
 ## Adding more pipelines
 
-Each pipeline is independent — just create a new folder with a `catchmeup.py` that prints to stdout, add it to the slash command mapping, and you're done.
+Each pipeline is independent — create a new folder with a `catchmeup.py` that writes `output.json` following the standard schema, add it to `crosscheck.py`, `generate-report.py`, and the report template, and you're done.
 
 ## License
 
