@@ -15,6 +15,7 @@ catchmeup-*.md
 catchmeup-*.html
 catchmeup-*.mp3
 catchmeup-*.narration.txt
+plan-*.json
 
 # Deploy
 deploy/
