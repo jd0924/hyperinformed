@@ -1,6 +1,6 @@
 # Hyperinformed
 
-Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt + Every.to + Hacker News blogs + Kickstarter.
+Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt + Every.to + Hacker News blogs + Kickstarter + Indie Hackers.
 
 ## Safety Rules
 
@@ -16,8 +16,8 @@ Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt +
 
 When the user says "catch me up", run `/catchmeup`. Follow these steps exactly:
 
-1. **Fetch** — Run all 7 pipeline scripts in parallel. Each writes `output.json` with structured data. If one fails, it exits cleanly with `status: "error"` in its JSON. No pipeline can crash another.
-2. **Generate report & narration** — Read the 7 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. This is an intellectual step — do NOT use an automated script. Produce **two files in the same pass** (guarantees identical content/ordering):
+1. **Fetch** — Run all 8 pipeline scripts in parallel. Each writes `output.json` with structured data. If one fails, it exits cleanly with `status: "error"` in its JSON. No pipeline can crash another.
+2. **Generate report & narration** — Read the 8 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. This is an intellectual step — do NOT use an automated script. Produce **two files in the same pass** (guarantees identical content/ordering):
    - `catchmeup-<start>-to-<end>.html` — the written report. Fill in `templates/report-template.html` content blocks directly. Set the `<!-- AUDIO_FILE -->` placeholder to the MP3 filename. Do NOT rewrite the CSS or JavaScript.
    - `catchmeup-<start>-to-<end>.narration.txt` — spoken narration script (see Narration Format below). Same content, same order as the HTML.
 
@@ -77,6 +77,7 @@ Each pipeline prints human-readable text to stdout AND writes structured JSON to
 - **Every.to**: `python3 every-pipeline/catchmeup.py` (private RSS feed)
 - **Hacker News**: `python3 hackernews-pipeline/catchmeup.py` (92 curated blog RSS feeds)
 - **Kickstarter**: `python3 kickstarter-pipeline/catchmeup.py` (trending live projects)
+- **Indie Hackers**: `python3 indiehackers-pipeline/catchmeup.py` (high-signal forum posts, 50+ views AND 2+ replies)
 
 ### JSON Output Schema
 
