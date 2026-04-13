@@ -19,6 +19,12 @@ When the user says "catch me up", run `/catchmeup`. Follow these steps exactly:
 2. **Generate report & narration** — Read the 7 `output.json` files. Use LLM judgment to decide topic groupings and write Top 5 highlights. This is an intellectual step — do NOT use an automated script. Produce **two files in the same pass** (guarantees identical content/ordering):
    - `catchmeup-<start>-to-<end>.html` — the written report. Fill in `templates/report-template.html` content blocks directly. Set the `<!-- AUDIO_FILE -->` placeholder to the MP3 filename. Do NOT rewrite the CSS or JavaScript.
    - `catchmeup-<start>-to-<end>.narration.txt` — spoken narration script (see Narration Format below). Same content, same order as the HTML.
+
+   **How to generate the HTML (mandatory process):**
+   1. Read all `output.json` files. Decide topic groupings per platform and write Top 5 highlights. This is LLM judgment — you decide which items belong to which topic, what the topic names are, and what the highlights say.
+   2. Write a `plan-<start>-to-<end>.json` encoding those decisions. The plan contains: `date_range`, `audio_file`, `output_file`, `highlights` (title + desc), `topics` (per-platform dict mapping topic names to lists of item URLs), and `skipped` (messages for zero-item pipelines). See `generate-report.py` for the exact schema.
+   3. Run `python3 generate-report.py <plan.json>`. It reads the plan + all `output.json` files and renders the HTML. This is mechanical — no LLM judgment happens here.
+   4. Do NOT use an agent or subagent to write HTML. Do NOT write HTML tags manually. Always use `generate-report.py`.
 3. **Cross-check** — Run `python3 crosscheck.py <report.html>`. It verifies per-platform item counts, URLs, and authors between JSON and HTML. If ANY check fails, fix the HTML before showing the report.
 4. **Generate audio** — Run `python3 tts-generate-say.py <narration.txt>`. Produces `catchmeup-<start>-to-<end>.mp3` using macOS Ava (Premium) voice.
 5. **Open** — Open the HTML in the browser. The embedded audio player loads the MP3 automatically.
