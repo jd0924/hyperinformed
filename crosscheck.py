@@ -25,6 +25,7 @@ PIPELINES = [
     {"name": "every", "json": "every-pipeline/output.json", "section": "Every.to"},
     {"name": "hackernews", "json": "hackernews-pipeline/output.json", "section": "HN Blogs"},
     {"name": "kickstarter", "json": "kickstarter-pipeline/output.json", "section": "Kickstarter"},
+    {"name": "indiehackers", "json": "indiehackers-pipeline/output.json", "section": "Indie Hackers"},
 ]
 
 

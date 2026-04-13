@@ -22,6 +22,7 @@ PIPELINES = {
     "every": {"json": "every-pipeline/output.json", "section": "Every.to", "unit": "posts"},
     "hackernews": {"json": "hackernews-pipeline/output.json", "section": "HN Blogs", "unit": "posts"},
     "kickstarter": {"json": "kickstarter-pipeline/output.json", "section": "Kickstarter", "unit": "projects"},
+    "indiehackers": {"json": "indiehackers-pipeline/output.json", "section": "Indie Hackers", "unit": "posts"},
 }
 
 
@@ -139,6 +140,20 @@ def render_kickstarter(item):
     )
 
 
+def render_indiehackers(item):
+    meta = item["meta"]
+    views = meta.get("views", 0)
+    replies = meta.get("replies", 0)
+    group = meta.get("group", "")
+    group_tag = f' <span class="type-tag">{group}</span>' if group else ""
+    return render_item(
+        item["title"],
+        f'<span class="author">{esc(item["author"])}</span> <span>{views} views, {replies} replies</span>{group_tag}',
+        item["url"],
+        item.get("description", "")[:200],
+    )
+
+
 RENDERERS = {
     "youtube": render_youtube,
     "twitter": render_twitter,
@@ -146,6 +161,7 @@ RENDERERS = {
     "producthunt": render_producthunt,
     "hackernews": render_hackernews,
     "kickstarter": render_kickstarter,
+    "indiehackers": render_indiehackers,
     "every": lambda item: render_item(
         item["title"],
         f'<span class="author">{esc(item["author"])}</span>',
@@ -333,7 +349,14 @@ def main():
         ks_content = render_platform("kickstarter", pipeline_data["kickstarter"], topic_assignments.get("kickstarter"), render_kickstarter)
     else:
         ks_content = f'<div style="padding:16px 20px;color:var(--dim);font-family:-apple-system,system-ui,sans-serif;font-size:14px;">{skipped_messages.get("kickstarter", "No projects")}</div>\n'
-    html = re.sub(r'<!-- ITEMS GO HERE\. Example:.*?-->\n\n<!-- ACTION BAR', ks_content + '\n<!-- ACTION BAR', html, flags=re.DOTALL)
+    html = re.sub(r'<!-- ITEMS GO HERE\. Example:.*?-->\n\n<!-- INDIEHACKERS', ks_content + '\n<!-- INDIEHACKERS', html, flags=re.DOTALL)
+
+    # Indie Hackers
+    if pipeline_data["indiehackers"]["count"] > 0:
+        ih_content = render_platform("indiehackers", pipeline_data["indiehackers"], topic_assignments.get("indiehackers"), render_indiehackers)
+    else:
+        ih_content = f'<div style="padding:16px 20px;color:var(--dim);font-family:-apple-system,system-ui,sans-serif;font-size:14px;">{skipped_messages.get("indiehackers", "No posts")}</div>\n'
+    html = re.sub(r'<!-- TOPIC GROUPS AND ITEMS GO HERE\. Example:\n<div class="topic">Building in Public</div>.*?-->\n\n<!-- ACTION BAR', ih_content + '\n<!-- ACTION BAR', html, flags=re.DOTALL)
 
     # Write output
     output_path = SCRIPT_DIR / output_file
