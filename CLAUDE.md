@@ -6,6 +6,7 @@ Multi-source intelligence feed — YouTube + X/Twitter + GitHub + Product Hunt +
 
 - **Preserve existing config files** — When editing existing config files (Firebase, .env, Info.plist, etc.), ALWAYS read the current file first and preserve existing working values. Never overwrite production config files without explicit confirmation.
 - **Never commit secrets** — Never commit or push sensitive credentials, API keys, tokens, or cookies to any repository. Always check for secrets before any git push. Use .env files and .gitignore for all sensitive data.
+- **Never commit personal data URLs** — Deploy URLs (e.g. Netlify) point to personal feed data. Never hardcode them in committed files. The deploy script prints the URL at runtime.
 
 ## Bug Fixing
 
@@ -28,7 +29,7 @@ When the user says "catch me up", run `/catchmeup`. Follow these steps exactly:
 3. **Cross-check** — Run `python3 crosscheck.py <report.html>`. It verifies per-platform item counts, URLs, and authors between JSON and HTML. If ANY check fails, fix the HTML before showing the report.
 4. **Generate audio** — Run `python3 tts-generate-say.py <narration.txt>`. Produces `catchmeup-<start>-to-<end>.mp3` using macOS Ava (Premium) voice.
 5. **Open** — Open the HTML in the browser. The embedded audio player loads the MP3 automatically.
-6. **Deploy** — Run `python3 deploy.py <report.html>`. Embeds the MP3 into the HTML and deploys to Netlify. Prints the live URL (https://majestic-genie-c59c74.netlify.app). Accessible from any device with a browser.
+6. **Deploy** — Run `python3 deploy.py <report.html>`. Embeds the MP3 into the HTML and deploys to Netlify. Prints the live URL. Accessible from any device with a browser.
 7. If 0 new items from a source, note they're caught up and when last run was.
 8. **Report pipeline failures** at the top of the status table: which pipeline failed, the error, and the likely reason.
 9. **Include everything except ads** — RTs, reposts, quotes, low-engagement posts all stay in. Only filter out pure advertisements with zero informational value.
