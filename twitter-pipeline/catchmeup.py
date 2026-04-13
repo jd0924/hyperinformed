@@ -43,17 +43,20 @@ def parse_tweet(tweet, source):
     is_quote = bool(tweet.quote)
 
     text = tweet.full_text or tweet.text or ""
+    # For retweets, use the original tweet's author and ID for canonical URL
+    canonical_id = tweet.id
     if is_repost and tweet.retweeted_tweet:
         rt = tweet.retweeted_tweet
         rt_user = rt.user
         text = rt.full_text or rt.text or text
         screen_name = rt_user.screen_name if rt_user else screen_name
         display_name = rt_user.name if rt_user else display_name
+        canonical_id = rt.id or tweet.id
 
-    url = f"https://x.com/{screen_name}/status/{tweet.id}"
+    url = f"https://x.com/{screen_name}/status/{canonical_id}"
 
     return {
-        "id": tweet.id,
+        "id": canonical_id,
         "username": screen_name,
         "name": display_name,
         "text": text.replace("\n", " "),
