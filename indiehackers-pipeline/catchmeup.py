@@ -2,10 +2,12 @@
 """Fetch high-signal Indie Hackers posts via Firebase API.
 
 Queries posts from the last 7 days by engagement, not by creation time.
-Tracks previously surfaced post IDs in seen.json to avoid duplicates
-across runs. This catches late bloomers that gain traction after their
-first day.
+Posts that clear the threshold show up every run — recurring appearances
+mean the post is genuinely important. Each post is tagged:
+  [NEW]    — first time appearing on the leaderboard
+  [RISING] — seen before, and views or replies increased since last run
 
+Tracks previous stats in seen.json to compute tags.
 No API key needed — Firebase read access is open.
 """
 
@@ -40,17 +42,30 @@ def save_last_run():
 
 
 def load_seen():
-    """Load set of previously surfaced post IDs with their timestamps."""
+    """Load previous stats for posts we've surfaced before.
+
+    Format: {post_id: {"views": N, "replies": N, "first_seen": iso, "times": N}}
+    Auto-prunes entries older than 14 days.
+    """
     if SEEN_FILE.exists():
         data = json.loads(SEEN_FILE.read_text())
-        # Prune entries older than 14 days to prevent unbounded growth
         cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
-        return {k: v for k, v in data.items() if v > cutoff}
+        return {k: v for k, v in data.items() if v.get("first_seen", "") > cutoff}
     return {}
 
 
 def save_seen(seen):
     SEEN_FILE.write_text(json.dumps(seen, indent=2))
+
+
+def tag_post(post, seen):
+    """Tag a post as [NEW] or [RISING] based on previous stats."""
+    prev = seen.get(post["id"])
+    if not prev:
+        return "NEW"
+    if post["views"] > prev["views"] or post["replies"] > prev["replies"]:
+        return "RISING"
+    return ""
 
 
 def fetch_posts_by_views():
@@ -100,13 +115,11 @@ def fetch_posts_by_views():
     return all_posts
 
 
-def filter_high_signal(posts, seen):
-    """Keep posts with 50+ views AND 2+ replies, excluding already-surfaced."""
+def filter_high_signal(posts):
+    """Keep posts with 50+ views AND 2+ replies."""
     return [
         p for p in posts
-        if p["views"] >= MIN_VIEWS
-        and p["replies"] >= MIN_REPLIES
-        and p["id"] not in seen
+        if p["views"] >= MIN_VIEWS and p["replies"] >= MIN_REPLIES
     ]
 
 
@@ -122,36 +135,49 @@ def main():
         else:
             print(f"  INDIE HACKERS — Posts since {since.strftime('%Y-%m-%d %H:%M UTC')}")
         print(f"  Scanning last {LOOKBACK_DAYS} days for high-signal posts")
-        print(f"  ({len(seen)} previously surfaced posts excluded)")
         print(f"{'=' * 70}\n")
 
         all_posts = fetch_posts_by_views()
-        filtered = filter_high_signal(all_posts, seen)
+        filtered = filter_high_signal(all_posts)
 
-        # Sort by views descending — surface the hottest posts first
+        # Tag each post and sort by views descending
+        for p in filtered:
+            p["tag"] = tag_post(p, seen)
         filtered.sort(key=lambda p: p["views"], reverse=True)
 
+        new_count = sum(1 for p in filtered if p["tag"] == "NEW")
+        rising_count = sum(1 for p in filtered if p["tag"] == "RISING")
+        returning_count = len(filtered) - new_count - rising_count
+
         if not filtered:
-            print(f"  No new high-signal posts (checked {len(all_posts)} total).\n")
+            print(f"  No high-signal posts (checked {len(all_posts)} total).\n")
         else:
             for i, p in enumerate(filtered, 1):
                 group = f"  [{p['group']}]" if p["group"] else ""
+                tag = f"  [{p['tag']}]" if p["tag"] else ""
                 body_preview = p["body"][:120].replace("\n", " ")
                 print(f"  {i:2}. {p['title'][:80]}")
-                print(f"      {p['views']} views, {p['replies']} replies{group}")
+                print(f"      {p['views']} views, {p['replies']} replies{group}{tag}")
                 print(f"      {body_preview}")
                 print(f"      {p['url']}")
                 print()
 
         print(f"{'=' * 70}")
         print(f"  {len(filtered)} high-signal posts (from {len(all_posts)} in last {LOOKBACK_DAYS}d)")
+        print(f"  {new_count} new, {rising_count} rising, {returning_count} returning")
         print(f"  Filter: {MIN_VIEWS}+ views AND {MIN_REPLIES}+ replies")
         print(f"{'=' * 70}")
 
-        # Mark newly surfaced posts as seen
+        # Update seen with current stats
         now = datetime.now(timezone.utc).isoformat()
         for p in filtered:
-            seen[p["id"]] = now
+            prev = seen.get(p["id"])
+            seen[p["id"]] = {
+                "views": p["views"],
+                "replies": p["replies"],
+                "first_seen": prev["first_seen"] if prev else now,
+                "times": (prev["times"] if prev else 0) + 1,
+            }
         save_seen(seen)
 
         # Write JSON output
@@ -166,6 +192,7 @@ def main():
                     "views": p["views"],
                     "replies": p["replies"],
                     "group": p["group"],
+                    "tag": p["tag"],
                 },
             }
             for p in filtered
