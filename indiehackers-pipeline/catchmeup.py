@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Fetch high-signal Indie Hackers posts via Firebase API.
 
-Fetches forum posts since last run, filters by engagement:
-  - 25+ views OR 5+ replies
+Queries posts from the last 7 days by engagement, not by creation time.
+Tracks previously surfaced post IDs in seen.json to avoid duplicates
+across runs. This catches late bloomers that gain traction after their
+first day.
+
 No API key needed — Firebase read access is open.
 """
 
@@ -13,6 +16,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
+SEEN_FILE = SCRIPT_DIR / "seen.json"
 OUTPUT_FILE = SCRIPT_DIR / "output.json"
 
 FIREBASE_URL = "https://indie-hackers.firebaseio.com/posts.json"
@@ -20,6 +24,7 @@ HEADERS = {"User-Agent": "Hyperinformed/1.0"}
 
 MIN_VIEWS = 50
 MIN_REPLIES = 2
+LOOKBACK_DAYS = 7
 
 
 def get_last_run():
@@ -27,19 +32,39 @@ def get_last_run():
         text = LAST_RUN_FILE.read_text().strip()
         if text:
             return datetime.fromisoformat(text)
-    return datetime.now(timezone.utc) - timedelta(days=7)
+    return datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
 
 
 def save_last_run():
     LAST_RUN_FILE.write_text(datetime.now(timezone.utc).isoformat())
 
 
-def fetch_posts(since):
-    """Fetch posts created since `since`, paginating if needed."""
-    since_ms = int(since.timestamp() * 1000)
+def load_seen():
+    """Load set of previously surfaced post IDs with their timestamps."""
+    if SEEN_FILE.exists():
+        data = json.loads(SEEN_FILE.read_text())
+        # Prune entries older than 14 days to prevent unbounded growth
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
+        return {k: v for k, v in data.items() if v > cutoff}
+    return {}
+
+
+def save_seen(seen):
+    SEEN_FILE.write_text(json.dumps(seen, indent=2))
+
+
+def fetch_posts_by_views():
+    """Fetch posts from the last 7 days, ordered by creation time.
+
+    Firebase doesn't support ordering by numViews directly when
+    filtering by createdTimestamp, so we fetch all recent posts
+    and sort client-side.
+    """
+    since_ms = int(
+        (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).timestamp() * 1000
+    )
     all_posts = []
 
-    # Firebase limits results; fetch in batches
     url = (
         f'{FIREBASE_URL}?orderBy="createdTimestamp"'
         f"&startAt={since_ms}"
@@ -75,34 +100,39 @@ def fetch_posts(since):
     return all_posts
 
 
-def filter_high_signal(posts):
-    """Keep posts with 50+ views AND 2+ replies."""
+def filter_high_signal(posts, seen):
+    """Keep posts with 50+ views AND 2+ replies, excluding already-surfaced."""
     return [
         p for p in posts
-        if p["views"] >= MIN_VIEWS and p["replies"] >= MIN_REPLIES
+        if p["views"] >= MIN_VIEWS
+        and p["replies"] >= MIN_REPLIES
+        and p["id"] not in seen
     ]
 
 
 def main():
     since = get_last_run()
+    seen = load_seen()
     first_run = not LAST_RUN_FILE.exists()
 
     try:
         print(f"{'=' * 70}")
         if first_run:
-            print(f"  INDIE HACKERS — FIRST RUN (last 7 days)")
+            print(f"  INDIE HACKERS — FIRST RUN (last {LOOKBACK_DAYS} days)")
         else:
             print(f"  INDIE HACKERS — Posts since {since.strftime('%Y-%m-%d %H:%M UTC')}")
+        print(f"  Scanning last {LOOKBACK_DAYS} days for high-signal posts")
+        print(f"  ({len(seen)} previously surfaced posts excluded)")
         print(f"{'=' * 70}\n")
 
-        all_posts = fetch_posts(since)
-        filtered = filter_high_signal(all_posts)
+        all_posts = fetch_posts_by_views()
+        filtered = filter_high_signal(all_posts, seen)
 
-        # Sort by views descending
+        # Sort by views descending — surface the hottest posts first
         filtered.sort(key=lambda p: p["views"], reverse=True)
 
         if not filtered:
-            print(f"  No high-signal posts (checked {len(all_posts)} total).\n")
+            print(f"  No new high-signal posts (checked {len(all_posts)} total).\n")
         else:
             for i, p in enumerate(filtered, 1):
                 group = f"  [{p['group']}]" if p["group"] else ""
@@ -114,9 +144,15 @@ def main():
                 print()
 
         print(f"{'=' * 70}")
-        print(f"  {len(filtered)} high-signal posts (from {len(all_posts)} total)")
+        print(f"  {len(filtered)} high-signal posts (from {len(all_posts)} in last {LOOKBACK_DAYS}d)")
         print(f"  Filter: {MIN_VIEWS}+ views AND {MIN_REPLIES}+ replies")
         print(f"{'=' * 70}")
+
+        # Mark newly surfaced posts as seen
+        now = datetime.now(timezone.utc).isoformat()
+        for p in filtered:
+            seen[p["id"]] = now
+        save_seen(seen)
 
         # Write JSON output
         json_items = [

@@ -24,6 +24,7 @@ deploy/
 # Runtime state
 */last_run.txt
 */output.json
+*/seen.json
 twitter-pipeline/user_cache.json
 
 # Python
