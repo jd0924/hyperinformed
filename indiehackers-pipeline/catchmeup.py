@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Fetch high-signal Indie Hackers posts via Firebase API.
+"""Fetch high-signal Indie Hackers posts via the site's Algolia search API.
 
-Queries posts from the last 7 days by engagement, not by creation time.
-Posts that clear the threshold show up every run — recurring appearances
-mean the post is genuinely important. Each post is tagged:
+Queries posts from the last 7 days by engagement. Posts that clear the
+threshold show up every run — recurring appearances mean the post is
+genuinely important. Each post is tagged:
   [NEW]    — first time appearing on the leaderboard
-  [RISING] — seen before, and views or replies increased since last run
+  [RISING] — seen before, and upvotes or replies increased since last run
 
 Tracks previous stats in seen.json to compute tags.
-No API key needed — Firebase read access is open.
+
+Previously this used the Firebase Realtime Database directly, but IH
+revoked public read access (returns 401). The site itself uses Algolia
+for search, and the search key is exposed in the page config — so we
+query that directly. No auth, no rate limits observed.
 """
 
 import json
@@ -21,10 +25,17 @@ LAST_RUN_FILE = SCRIPT_DIR / "last_run.txt"
 SEEN_FILE = SCRIPT_DIR / "seen.json"
 OUTPUT_FILE = SCRIPT_DIR / "output.json"
 
-FIREBASE_URL = "https://indie-hackers.firebaseio.com/posts.json"
-HEADERS = {"User-Agent": "Hyperinformed/1.0"}
+ALGOLIA_URL = "https://N86T1R3OWZ-dsn.algolia.net/1/indexes/discussions/query"
+ALGOLIA_APP_ID = "N86T1R3OWZ"
+ALGOLIA_API_KEY = "5140dac5e87f47346abbda1a34ee70c3"  # public search-only key
+HEADERS = {
+    "User-Agent": "Hyperinformed/1.0",
+    "X-Algolia-Application-Id": ALGOLIA_APP_ID,
+    "X-Algolia-API-Key": ALGOLIA_API_KEY,
+    "Content-Type": "application/json",
+}
 
-MIN_VIEWS = 50
+MIN_UPVOTES = 2
 MIN_REPLIES = 2
 LOOKBACK_DAYS = 7
 
@@ -63,64 +74,69 @@ def tag_post(post, seen):
     prev = seen.get(post["id"])
     if not prev:
         return "NEW"
-    if post["views"] > prev["views"] or post["replies"] > prev["replies"]:
+    if post["upvotes"] > prev.get("upvotes", 0) or post["replies"] > prev["replies"]:
         return "RISING"
     return ""
 
 
-def fetch_posts_by_views():
-    """Fetch posts from the last 7 days, ordered by creation time.
+def fetch_posts_by_engagement():
+    """Fetch high-signal posts from the last 7 days via Algolia.
 
-    Firebase doesn't support ordering by numViews directly when
-    filtering by createdTimestamp, so we fetch all recent posts
-    and sort client-side.
+    Filters server-side for minimum engagement, dedups across the
+    Algolia partNumber shards (same post can appear multiple times
+    with different objectIDs like `post-abc123-1`, `post-abc123-2`),
+    and returns the first part of each unique post.
     """
     since_ms = int(
         (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).timestamp() * 1000
     )
-    all_posts = []
 
-    url = (
-        f'{FIREBASE_URL}?orderBy="createdTimestamp"'
-        f"&startAt={since_ms}"
-        f"&limitToFirst=500"
-    )
-    req = urllib.request.Request(url, headers=HEADERS)
+    body = json.dumps({
+        "hitsPerPage": 200,
+        "filters": f"createdTimestamp > {since_ms} AND itemType:post",
+        "numericFilters": [
+            f"numUpvotes >= {MIN_UPVOTES}",
+            f"numReplies >= {MIN_REPLIES}",
+        ],
+    }).encode()
+
+    req = urllib.request.Request(ALGOLIA_URL, data=body, headers=HEADERS)
     resp = urllib.request.urlopen(req, timeout=30)
     data = json.loads(resp.read())
 
-    if not data:
-        return []
-
-    for post_id, post in data.items():
-        created_ms = post.get("createdTimestamp", 0)
+    # Dedup by itemKey (same post appears across part shards)
+    by_item = {}
+    for hit in data.get("hits", []):
+        item_key = hit.get("itemKey", "")
+        # itemKey is like "post-5e39db229c" — strip prefix for URL path
+        if not item_key.startswith("post-"):
+            continue
+        post_id = item_key[len("post-"):]
+        created_ms = hit.get("createdTimestamp", 0)
         created = datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc)
 
-        if post.get("createdByBannedUser"):
+        # Prefer part 0 (first shard) if we see multiple
+        if post_id in by_item and hit.get("partNumber", 0) > by_item[post_id]["_part"]:
             continue
 
-        all_posts.append({
+        by_item[post_id] = {
             "id": post_id,
-            "title": (post.get("title") or "").strip(),
-            "body": (post.get("body") or "").strip(),
-            "username": post.get("username", ""),
-            "group": post.get("groupName", ""),
-            "views": post.get("numViews", 0),
-            "replies": post.get("numReplies", 0),
-            "link_clicks": post.get("numLinkClicks", 0),
+            "title": (hit.get("title") or "").strip(),
+            "body": (hit.get("body") or "").strip(),
+            "username": hit.get("username", ""),
+            "group": hit.get("groupName", ""),
+            "upvotes": hit.get("numUpvotes", 0),
+            "replies": hit.get("numReplies", 0),
+            "link_clicks": hit.get("numLinkClicks", 0),
             "date": created.strftime("%Y-%m-%d %H:%M"),
             "url": f"https://www.indiehackers.com/post/{post_id}",
-        })
+            "_part": hit.get("partNumber", 0),
+        }
 
-    return all_posts
-
-
-def filter_high_signal(posts):
-    """Keep posts with 50+ views AND 2+ replies."""
-    return [
-        p for p in posts
-        if p["views"] >= MIN_VIEWS and p["replies"] >= MIN_REPLIES
-    ]
+    # Strip internal _part field
+    for p in by_item.values():
+        p.pop("_part", None)
+    return list(by_item.values())
 
 
 def main():
@@ -137,35 +153,34 @@ def main():
         print(f"  Scanning last {LOOKBACK_DAYS} days for high-signal posts")
         print(f"{'=' * 70}\n")
 
-        all_posts = fetch_posts_by_views()
-        filtered = filter_high_signal(all_posts)
+        filtered = fetch_posts_by_engagement()
 
-        # Tag each post and sort by views descending
+        # Tag each post and sort by upvotes descending
         for p in filtered:
             p["tag"] = tag_post(p, seen)
-        filtered.sort(key=lambda p: p["views"], reverse=True)
+        filtered.sort(key=lambda p: p["upvotes"], reverse=True)
 
         new_count = sum(1 for p in filtered if p["tag"] == "NEW")
         rising_count = sum(1 for p in filtered if p["tag"] == "RISING")
         returning_count = len(filtered) - new_count - rising_count
 
         if not filtered:
-            print(f"  No high-signal posts (checked {len(all_posts)} total).\n")
+            print(f"  No high-signal posts in the last {LOOKBACK_DAYS} days.\n")
         else:
             for i, p in enumerate(filtered, 1):
                 group = f"  [{p['group']}]" if p["group"] else ""
                 tag = f"  [{p['tag']}]" if p["tag"] else ""
                 body_preview = p["body"][:120].replace("\n", " ")
                 print(f"  {i:2}. {p['title'][:80]}")
-                print(f"      {p['views']} views, {p['replies']} replies{group}{tag}")
+                print(f"      {p['upvotes']} upvotes, {p['replies']} replies{group}{tag}")
                 print(f"      {body_preview}")
                 print(f"      {p['url']}")
                 print()
 
         print(f"{'=' * 70}")
-        print(f"  {len(filtered)} high-signal posts (from {len(all_posts)} in last {LOOKBACK_DAYS}d)")
+        print(f"  {len(filtered)} high-signal posts (last {LOOKBACK_DAYS}d)")
         print(f"  {new_count} new, {rising_count} rising, {returning_count} returning")
-        print(f"  Filter: {MIN_VIEWS}+ views AND {MIN_REPLIES}+ replies")
+        print(f"  Filter: {MIN_UPVOTES}+ upvotes AND {MIN_REPLIES}+ replies")
         print(f"{'=' * 70}")
 
         # Update seen with current stats
@@ -173,7 +188,7 @@ def main():
         for p in filtered:
             prev = seen.get(p["id"])
             seen[p["id"]] = {
-                "views": p["views"],
+                "upvotes": p["upvotes"],
                 "replies": p["replies"],
                 "first_seen": prev["first_seen"] if prev else now,
                 "times": (prev["times"] if prev else 0) + 1,
@@ -189,7 +204,7 @@ def main():
                 "date": p["date"],
                 "description": p["body"][:300],
                 "meta": {
-                    "views": p["views"],
+                    "upvotes": p["upvotes"],
                     "replies": p["replies"],
                     "group": p["group"],
                     "tag": p["tag"],

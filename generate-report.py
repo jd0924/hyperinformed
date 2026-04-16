@@ -142,13 +142,17 @@ def render_kickstarter(item):
 
 def render_indiehackers(item):
     meta = item["meta"]
-    views = meta.get("views", 0)
+    # Support both new "upvotes" and legacy "views" keys
+    engagement = meta.get("upvotes", meta.get("views", 0))
+    engagement_label = "upvotes" if "upvotes" in meta else "views"
     replies = meta.get("replies", 0)
     group = meta.get("group", "")
+    tag = meta.get("tag", "")
     group_tag = f' <span class="type-tag">{group}</span>' if group else ""
+    status_tag = f' <span class="type-tag">{tag}</span>' if tag else ""
     return render_item(
         item["title"],
-        f'<span class="author">{esc(item["author"])}</span> <span>{views} views, {replies} replies</span>{group_tag}',
+        f'<span class="author">{esc(item["author"])}</span> <span>{engagement} {engagement_label}, {replies} replies</span>{group_tag}{status_tag}',
         item["url"],
         item.get("description", "")[:200],
     )
